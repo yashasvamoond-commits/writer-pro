@@ -55,7 +55,7 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
       CourtHeading.configure({ levels: [1, 2, 3] }),
       VarChip,
       FnRef,
-      TextAlign.configure({ types: ['paragraph', 'heading'] }),
+      TextAlign.configure({ types: ['paragraph', 'heading'], defaultAlignment: settingsRef.current.defaultAlign || 'left' }),
       Placeholder.configure({ placeholder }),
       Table.configure({ resizable: true }),
       TableRow,

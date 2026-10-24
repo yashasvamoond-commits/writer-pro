@@ -191,6 +191,8 @@ export default function Toolbar(p: Props) {
             <div className="mtitle">{t('paper')}</div>
             <button onClick={() => { patch({ pageSize: 'A4' }); close(); }}>A4 {settings.pageSize === 'A4' ? '✓' : ''}</button>
             <button onClick={() => { patch({ pageSize: 'LEGAL' }); close(); }}>Legal {settings.pageSize === 'LEGAL' ? '✓' : ''}</button>
+            <button onClick={() => { patch({ pageSize: 'LETTER' }); close(); }}>Letter {settings.pageSize === 'LETTER' ? '✓' : ''}</button>
+            <button onClick={() => { p.onHF(); close(); }}>📐 {t('pageSetupTitle')}</button>
             <hr />
             <button onClick={() => { patch({ marginL: 1.75, marginR: 1, marginT: 1, marginB: 1 }); close(); }}>{t('courtMargins')}</button>
             <button onClick={() => { patch({ guides: !settings.guides }); close(); }}>{t('guides')} {settings.guides ? '✓' : ''}</button>

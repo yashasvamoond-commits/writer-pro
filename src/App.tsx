@@ -5,7 +5,7 @@ import Toolbar from './ui/Toolbar';
 import Sidebar from './ui/Sidebar';
 import {
   BottomSheet, CauseTitleModal, DocsModal, ExportModal, KrutiModal,
-  HeaderFooterModal, FindReplaceModal, FootnoteModal, LinkModal, OcrModal, SymbolsModal,
+  PageSetupModal, FindReplaceModal, FootnoteModal, LinkModal, OcrModal, SymbolsModal,
 } from './ui/Overlays';
 import { DEFAULT_SETTINGS, DocRecord, CaseInfo, PageSettings, TextBox } from './types';
 import { listDocs, newDoc, putDoc, pushVersion } from './lib/storage';
@@ -14,7 +14,7 @@ import { applyVariables, insertTextAtCursor, docStats, appendBlocks, tocBlocks }
 import { FONT_BY_ID } from './data/fonts';
 import { I18nCtx, makeT, UiLang } from './data/i18n';
 
-const PAGE_DIM: Record<string, [number, number]> = { A4: [794, 1123], LEGAL: [816, 1344] };
+const PAGE_DIM: Record<string, [number, number]> = { A4: [794, 1123], LEGAL: [816, 1344], LETTER: [816, 1056] };
 
 export default function App() {
   const [doc, setDoc] = useState<DocRecord>(() => {
@@ -66,7 +66,9 @@ export default function App() {
 
   useEffect(() => {
     const root = document.documentElement;
-    const [w, h] = PAGE_DIM[settings.pageSize];
+    const [w, h] = settings.pageSize === 'CUSTOM'
+      ? [Math.round(settings.customWIn * 96), Math.round(settings.customHIn * 96)]
+      : PAGE_DIM[settings.pageSize] || PAGE_DIM.A4;
     const fsPx = (settings.fontSizePt * 96) / 72;
     root.style.setProperty('--page-w', `${w}px`);
     root.style.setProperty('--page-h', `${h}px`);
@@ -78,6 +80,8 @@ export default function App() {
     root.style.setProperty('--fs-px', `${fsPx}px`);
     root.style.setProperty('--lh', `${Math.round(fsPx * settings.lineHeight)}px`);
     root.style.setProperty('--cols', String(settings.columns || 1));
+    root.style.setProperty('--sp-before', `${Math.round(((settings.spacingBefore ?? 0) * 96) / 72)}px`);
+    root.style.setProperty('--sp-after', `${Math.round(((settings.spacingAfter ?? 0) * 96) / 72)}px`);
     root.style.setProperty('--font-hi', FONT_BY_ID[settings.fontHi]?.stack || FONT_BY_ID.mukta.stack);
     root.style.setProperty('--font-en', FONT_BY_ID[settings.fontEn]?.stack || FONT_BY_ID.tinos.stack);
     applyPageRule(settings);
@@ -236,7 +240,7 @@ export default function App() {
           <div className="desk">
             <div className={`sheet ${settings.guides ? 'guides' : ''}`} ref={sheetRef}>
               {settings.guides && <span className="stitch-note">COURT STITCHING MARGIN 1.75&quot;</span>}
-              {settings.headerText && <div className="sheet-head">{settings.headerText}</div>}
+              {settings.headerText && !settings.firstPageDifferent && <div className="sheet-head">{settings.headerText}</div>}
               {settings.footerText && <div className="sheet-foot">{settings.footerText}</div>}
               {settings.watermark && <div className="watermark">{settings.watermark}</div>}
               <div className="tb-layer" onPointerMove={onBoxPointerMove} onPointerUp={onBoxPointerUp}>
@@ -265,7 +269,7 @@ export default function App() {
                 <button className="tb-add" onClick={addTextBox} title={t('tbAdd')}>＋ {t('textBox')}</button>
               </div>
               <EditorPane
-                key={`${doc.id}-${editorKey}`}
+                key={`${doc.id}-${editorKey}-${settings.defaultAlign}`}
                 content={doc.content as JSONContent}
                 settings={settings}
                 placeholder={uiLang === 'hi' ? 'यहाँ ड्राफ्ट लिखना आरंभ करें…' : 'Start drafting here…'}
@@ -292,7 +296,7 @@ export default function App() {
         <CauseTitleModal open={causeOpen} onClose={() => setCauseOpen(false)} editor={editor} vars={doc.variables} toast={toast} />
         <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} editor={editor} doc={doc} onPrint={() => printNow()} toast={toast} />
         <DocsModal open={docsOpen} onClose={() => setDocsOpen(false)} currentId={doc.id} onOpen={openDoc} toast={toast} currentDoc={doc} onRestore={restoreContent} />
-        <HeaderFooterModal open={hfOpen} onClose={() => setHfOpen(false)} settings={settings} patch={patch} />
+        <PageSetupModal open={hfOpen} onClose={() => setHfOpen(false)} settings={settings} patch={patch} editor={editor} toast={toast} />
         <FindReplaceModal open={frOpen} onClose={() => setFrOpen(false)} editor={editor} />
         <FootnoteModal open={fnOpen} onClose={() => setFnOpen(false)} editor={editor} />
         <LinkModal open={linkOpen} onClose={() => setLinkOpen(false)} editor={editor} />

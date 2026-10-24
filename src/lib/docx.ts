@@ -84,8 +84,11 @@ function runsOf(node: JSONContent, ctx: Ctx, prefix = ''): (TextRun | ExternalHy
 
 function blockToParagraphs(node: JSONContent, ctx: Ctx, prefix: string): (Paragraph | Table)[] {
   const s = ctx.doc.settings;
-  const spacing = { line: Math.round(s.lineHeight * 240), lineRule: LineRuleType.AUTO };
-  const align = ALIGN[(node.attrs?.textAlign as string) || 'left'] || AlignmentType.LEFT;
+  const spacing = {
+    line: Math.round(s.lineHeight * 240), lineRule: LineRuleType.AUTO,
+    before: Math.round((s.spacingBefore ?? 0) * 20), after: Math.round((s.spacingAfter ?? 0) * 20),
+  };
+  const align = ALIGN[(node.attrs?.textAlign as string) || s.defaultAlign || 'left'] || AlignmentType.LEFT;
   const common = { spacing, alignment: align };
   switch (node.type) {
     case 'heading': {
@@ -138,7 +141,11 @@ export async function exportDocx(doc: DocRecord, json: JSONContent): Promise<Blo
   (json.content || []).forEach((node, i) => {
     children.push(...blockToParagraphs(node, ctx, prefixes[i] || ''));
   });
-  const size = s.pageSize === 'A4' ? { width: 11906, height: 16838 } : { width: 12240, height: 20160 };
+  const size =
+    s.pageSize === 'A4' ? { width: 11906, height: 16838 } :
+    s.pageSize === 'LETTER' ? { width: 12240, height: 15840 } :
+    s.pageSize === 'CUSTOM' ? { width: Math.round(s.customWIn * 1440), height: Math.round(s.customHIn * 1440) } :
+    { width: 12240, height: 20160 };
   const margin = {
     top: Math.round(s.marginT * 1440),
     right: Math.round(s.marginR * 1440),
@@ -176,10 +183,14 @@ export async function exportDocx(doc: DocRecord, json: JSONContent): Promise<Blo
       {
         properties: {
           page: { size, margin },
+          titlePage: !!s.firstPageDifferent,
           column: s.columns && s.columns > 1 ? { count: s.columns, space: 720 } : undefined,
         },
         headers: s.headerText
-          ? { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: s.headerText, size: s.fontSizePt * 2 - 4, font: runFont })] })] }) }
+          ? {
+              default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: s.headerText, size: s.fontSizePt * 2 - 4, font: runFont })] })] }),
+              first: s.firstPageDifferent ? new Header({ children: [new Paragraph({ children: [] })] }) : undefined,
+            }
           : undefined,
         footers: footerKids.length ? { default: new Footer({ children: footerKids }) } : undefined,
         children,

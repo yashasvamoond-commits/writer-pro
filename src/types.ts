@@ -1,4 +1,5 @@
-export type PageSize = 'A4' | 'LEGAL';
+export type PageSize = 'A4' | 'LEGAL' | 'LETTER' | 'CUSTOM';
+export type Align = 'left' | 'center' | 'right' | 'justify';
 
 export interface PageSettings {
   pageSize: PageSize;
@@ -17,6 +18,12 @@ export interface PageSettings {
   columns: 1 | 2 | 3;
   watermark: string;
   pageNumbers: boolean;
+  customWIn: number;
+  customHIn: number;
+  defaultAlign: Align;
+  spacingBefore: number; // pt before each paragraph
+  spacingAfter: number;  // pt after each paragraph
+  firstPageDifferent: boolean; // hide header on first page
   guides: boolean;
   spellcheck: boolean;
 }
@@ -38,6 +45,12 @@ export const DEFAULT_SETTINGS: PageSettings = {
   columns: 1,
   watermark: '',
   pageNumbers: true,
+  customWIn: 8.27,
+  customHIn: 11.69,
+  defaultAlign: 'left',
+  spacingBefore: 0,
+  spacingAfter: 8,
+  firstPageDifferent: false,
   guides: true,
   spellcheck: true,
 };

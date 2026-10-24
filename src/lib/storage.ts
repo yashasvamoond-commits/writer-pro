@@ -67,3 +67,21 @@ export function duplicateDoc(id: string): DocRecord | undefined {
   save([copy, ...load()]);
   return copy;
 }
+
+/* ---------------- version history (snapshots) ---------------- */
+const VKEY = 'writerpro.versions.v1';
+export interface VersionRecord { id: string; docId: string; at: number; label: string; content: unknown }
+
+function loadVersions(): VersionRecord[] {
+  try { return JSON.parse(localStorage.getItem(VKEY) || '[]'); } catch { return []; }
+}
+export function pushVersion(doc: DocRecord, label: string): VersionRecord {
+  const all = loadVersions();
+  const v: VersionRecord = { id: `v${Date.now().toString(36)}`, docId: doc.id, at: Date.now(), label, content: doc.content };
+  const mine = [v, ...all.filter((x) => x.docId === doc.id)].slice(0, 20);
+  localStorage.setItem(VKEY, JSON.stringify([...mine, ...all.filter((x) => x.docId !== doc.id)]));
+  return v;
+}
+export function listVersions(docId: string): VersionRecord[] {
+  return loadVersions().filter((v) => v.docId === docId).sort((a, b) => b.at - a.at);
+}

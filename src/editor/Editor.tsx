@@ -8,10 +8,15 @@ import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
+import Superscript from '@tiptap/extension-superscript';
+import Subscript from '@tiptap/extension-subscript';
 import { CourtHeading, CourtParagraph, FnRef, SpellCheckPlugin, VarChip } from './extensions';
 import { ALL_ENTRIES } from '../data/legal-dictionary';
 import { containsDevanagari, detectKrutiDev } from '../lib/krutidev';
+import { moveBlock, dupBlock, deleteBlock } from '../lib/editor-ops';
 import { PageSettings } from '../types';
 
 interface Props {
@@ -40,11 +45,12 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
   const acRef = useRef(ac);
   acRef.current = ac;
   const editorRef = useRef<Editor | null>(null);
+  const [gutter, setGutter] = useState<{ top: number; left: number } | null>(null);
 
   const editor = useEditor({
     content,
     extensions: [
-      StarterKit.configure({ paragraph: false, heading: false }),
+      StarterKit.configure({ paragraph: false, heading: false, link: { openOnClick: false, autolink: true } }),
       CourtParagraph,
       CourtHeading.configure({ levels: [1, 2, 3] }),
       VarChip,
@@ -56,7 +62,11 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
       TableCell,
       TableHeader,
       Image.configure({ inline: false }),
-      Link.configure({ openOnClick: false, autolink: true }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      Superscript,
+      Subscript,
       SpellCheckPlugin(
         () => settingsRef.current.spellcheck,
         () => settingsRef.current.grammar,
@@ -88,7 +98,15 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
       onUpdate(e.getJSON());
       refreshAc(e);
     },
-    onSelectionUpdate: ({ editor: e }) => refreshAc(e),
+    onSelectionUpdate: ({ editor: e }) => {
+      refreshAc(e);
+      const { $from } = e.state.selection;
+      if ($from.depth >= 1) {
+        const pos = $from.before(1);
+        const c = e.view.coordsAtPos(pos + 1);
+        setGutter({ top: c.top, left: c.left });
+      } else setGutter(null);
+    },
   });
 
   function commitAc(e: Editor, a: AcState) {
@@ -146,6 +164,14 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
 
   return (
     <>
+      {gutter && editor && (
+        <div className="block-gutter" style={{ top: gutter.top - 6, left: Math.max(4, gutter.left - 46) }}>
+          <button title="Move up / ऊपर" onClick={() => moveBlock(editor, -1)}>↑</button>
+          <button title="Move down / नीचे" onClick={() => moveBlock(editor, 1)}>↓</button>
+          <button title="Duplicate / प्रतिरूप" onClick={() => dupBlock(editor)}>⧉</button>
+          <button title="Delete block / ब्लॉक हटाएँ" onClick={() => deleteBlock(editor)}>🗑</button>
+        </div>
+      )}
       <EditorContent editor={editor} />
       {ac.open && (
         <div className="ac-popup" style={{ left: ac.x, top: ac.y }}>

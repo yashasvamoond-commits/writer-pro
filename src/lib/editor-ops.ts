@@ -1,13 +1,15 @@
 import type { Editor, JSONContent } from '@tiptap/core';
-import { Block, parseBlocks } from './templates';
+import { Block, filterBlocksLang, parseBlocks } from './templates';
 import { blocksToContent } from '../editor/insert';
 import { krutiDevToUnicode, unicodeToKruti, containsDevanagari } from './krutidev';
 
-export function appendBlocks(editor: Editor, blocks: Block[], vars: Record<string, string> = {}) {
-  editor.chain().focus('end').insertContent(blocksToContent(blocks, vars)).run();
+export function appendBlocks(editor: Editor, blocks: Block[], vars: Record<string, string> = {}, lang?: 'en' | 'hi') {
+  const bl = lang ? filterBlocksLang(blocks, lang) : blocks;
+  editor.chain().focus('end').insertContent(blocksToContent(bl.length ? bl : blocks.slice(0, 0), vars)).run();
 }
 
-export function insertBlocksAtCursor(editor: Editor, blocks: Block[], vars: Record<string, string> = {}) {
+export function insertBlocksAtCursor(editor: Editor, blocks: Block[], vars: Record<string, string> = {}, lang?: 'en' | 'hi') {
+  if (lang) blocks = filterBlocksLang(blocks, lang);
   editor.chain().focus().insertContent(blocksToContent(blocks, vars)).run();
 }
 
@@ -93,7 +95,7 @@ import type { Jurisdiction } from './templates';
 
 /** Court header always goes RIGHT-ALIGNED at the very top of the document. */
 export function insertCourtHeader(editor: Editor, j: Jurisdiction, lang: 'en' | 'hi', vars: Record<string, string>) {
-  const blocks = parseBlocks(lang === 'hi' ? j.hi : j.en);
+  const blocks = filterBlocksLang(parseBlocks(lang === 'hi' ? j.hi : j.en), lang);
   editor.chain().insertContentAt(0, blocksToContent(blocks, vars)).run();
 }
 

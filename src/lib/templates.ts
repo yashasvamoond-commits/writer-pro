@@ -16,6 +16,21 @@ export interface Block {
   lang: 'hi' | 'en';
 }
 
+/**
+ * Single-language insertion: templates are authored bilingual (Hindi + English
+ * lines together); when a template is inserted ONLY the lines of the currently
+ * chosen software language are kept. Lines that are language-neutral (numbers,
+ * symbols, variable chips only) survive in both languages.
+ */
+export function filterBlocksLang(blocks: Block[], lang: 'en' | 'hi'): Block[] {
+  return blocks.filter((b) => {
+    const hi = containsDevanagari(b.text);
+    const en = /[A-Za-z]{2,}/.test(b.text.replace(/{{\w+}}/g, ' ')); // ignore {{var}} token names
+    if (!hi && !en) return true; // neutral line — keep in both languages
+    return hi === (lang === 'hi');
+  });
+}
+
 export function parseBlocks(src: string): Block[] {
   const out: Block[] = [];
   for (const raw of src.split('\n')) {

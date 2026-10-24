@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Locate / prepare Android SDK
         run: |
@@ -68,7 +68,17 @@ jobs:
           cd android
           echo "sdk.dir=${ANDROID_HOME:-/usr/local/lib/android/sdk}" > local.properties
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
+
+      - name: Report gradle log on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tail -c 50000 /tmp/gradle.log > /tmp/tail.log || true
+          BODY=$(python3 -c "import json,sys; print(json.dumps('GRADLE LOG TAIL:\n```\n' + open('/tmp/tail.log', errors='ignore').read() + '\n```'))")
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -f body="$BODY" || true
 
       - name: Stage APK
         run: |

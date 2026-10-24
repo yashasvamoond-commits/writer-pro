@@ -24,7 +24,6 @@ const CRPC_TO_BNSS: Record<string, string> = {
   '164': '183', '313': '351', '205': '229', '317': '355', '457': '503',
 };
 
-const HI_AUX = '(है|हैं|था|थी|थे|थीं|करना|करने|किया|किए|की|का|के|होगा|होगी|रहा|रही|रहे|जाए|जाये|गया|गयी|गए)';
 
 export function checkGrammar(text: string): GrammarIssue[] {
   const issues: GrammarIssue[] = [];
@@ -63,10 +62,9 @@ export function checkGrammar(text: string): GrammarIssue[] {
   });
 
   // ---- Hindi rules ----
-  en(new RegExp(`([क-ह][ािीुूृेैोौंँ]?)${HI_AUX.replace(/[()]/g, '')}`, 'g'), () => undefined); // placeholder no-op
-  const hiSpace = new RegExp(`([क-ह][ािीुूृेैोौंँ]?)((?:है|हैं|था|थी|थे|थीं|करना|करने|किया|किए)(?![्ािीुूृेैोौं]))`, 'g');
+  const hiSpace = /((?:[क-ह][ािीुूृेैोौं्]?)+?)(है|हैं|था|थी|थे|थीं|करना|करने|किया|किए)(?=[\s।,;.!?]|$)/g;
   en(hiSpace, (mm) => {
-    // only flag when glued without space: e.g. "कियाहै"
+    // only fires when glued without space: e.g. "कियाहै"
     push(mm.index, mm.index + mm[0].length, 'Missing space before helper verb', 'सहायक क्रिया से पहले रिक्ति चाहिए', `${mm[1]} ${mm[2]}`);
   });
   en(/([क-ह])\1/g, (mm) => {
@@ -74,7 +72,7 @@ export function checkGrammar(text: string): GrammarIssue[] {
   });
 
   // ---- Legal citation checks ----
-  en(/(\d+(?:\([0-9A-Za-z]+\))?)\s*(IPC)\b/g, (mm) => {
+  en(/(\d+[A-Z]?(?:\([0-9A-Za-z]+\))?)\s*(IPC)\b/g, (mm) => {
     const key = mm[1].toLowerCase();
     const bns = IPC_TO_BNS[key];
     push(mm.index, mm.index + mm[0].length,

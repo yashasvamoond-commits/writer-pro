@@ -40,6 +40,15 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v8 — Clerk becomes a paralegal)
+
+- **Case intelligence per file** — the clerk now reads out of every document: **case number, FIR number, police station, sections** (IPC/BNS/CrPC/BNSS/NDPS…), **parties (X vs Y)**, **document type** (charge-sheet, bail, judgment, FIR copy, complaint, affidavit, vakalatnama, petition, summons, warrant, reply, order, application), **advocate name**, **next hearing date** and **decided date** — English and Hindi patterns, OCR'd scans included.
+- **📅 Agenda** — upcoming hearing dates from everything ever scanned: TODAY highlighted red, ≤3 days amber, ≤7 days gold, next 30 days listed.
+- **Persistent court-wise ledger (register)** — every scan adds case no / FIR / parties / next date to the ledger, surviving app restarts; searchable.
+- **Register export** — one-tap **CSV** (Excel-ready, with BOM) and a formatted **Word register** with a table per court.
+- **🔍 Search** across file names, case numbers, FIR numbers, parties, sections and doc types.
+- **✍ Open as draft** — push any read/OCR'd file's text straight into the editor and start drafting on it.
+
 ## Feature highlights (v7 — Smart Clerk: court sorter + all-in-one converter)
 
 - **🧑‍⚖ Smart clerk** (first sidebar tab): select files **or a whole folder** from the tablet — every PDF / Word / text / image document is read **on-device** and filed automatically by the court heading written inside it:

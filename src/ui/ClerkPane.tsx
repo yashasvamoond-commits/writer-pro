@@ -1,20 +1,29 @@
 /**
- * 🧑‍⚖ Smart Clerk pane — reads every PDF/Word/text/image file you pick from
- * the tablet, works out from the heading INSIDE each document which of the
- * five courts it belongs to (JM · ACJM · ADJ · SDM · AECM) and files the rest
- * under Miscellaneous. Also the all-in-one converter (PDF ⇄ Word, TXT, HTML,
- * PNG, print-to-PDF) — scanned files go through the bundled offline OCR.
+ * 🧑‍⚖ Smart Clerk — paralegal workbench.
+ *
+ *  • reads every PDF/Word/text/image file you pick (offline; scans → OCR)
+ *  • files each document under the court named INSIDE it (JM · ACJM · ADJ ·
+ *    SDM · AECM), Miscellaneous only when no court heading exists
+ *  • extracts case no · FIR no · police station · sections · parties ·
+ *    next hearing date · decided date · document type · advocate
+ *  • keeps a persistent court-wise ledger + 📅 agenda of upcoming dates
+ *  • exports the whole register (CSV / Word) and opens any file's text as a
+ *    draft in the editor — all on-device.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { saveAs } from 'file-saver';
 import { renderAsync } from 'docx-preview';
+import type { Editor } from '@tiptap/react';
+import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { useI18n } from '../data/i18n';
-import { classifyText, COURT_ORDER, CourtId } from '../lib/court-classify';
+import { COURT_ORDER, CourtId } from '../lib/court-classify';
+import { fmtDate, daysUntil } from '../lib/clerk-extract';
 import {
   FileKind, kindOf, pdfToDocx, pdfToHtml, pdfToPngZip, pdfToTxt, docxToHtmlString, docxToTxt,
   ocrImage, readFileSmart, ReadResult, targetsFor, Target, TARGET_LABEL, txtToDocx,
 } from '../lib/clerk';
+import { insertTextAtCursor } from '../lib/editor-ops';
 
 interface ClerkEntry {
   id: string;
@@ -27,10 +36,19 @@ interface ClerkEntry {
   progress?: number;
 }
 
-interface LedgerItem { name: string; court: CourtId; at: number; ocr: boolean }
-const LKEY = 'writerpro.clerk.ledger';
-function loadLedger(): LedgerItem[] { try { return JSON.parse(localStorage.getItem(LKEY) || '[]'); } catch { return []; } }
-function saveLedger(items: LedgerItem[]) { localStorage.setItem(LKEY, JSON.stringify(items.slice(0, 200))); }
+interface LedgerItem {
+  name: string; court: CourtId; at: number; ocr: boolean;
+  caseNo?: string; firNo?: string; psName?: string; sections?: string[];
+  title?: string; nextDate?: string; decidedDate?: string; docType?: string; advocate?: string;
+}
+const LKEY = 'writerpro.clerk.ledger.v2';
+function loadLedger(): LedgerItem[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LKEY) || localStorage.getItem('writerpro.clerk.ledger') || '[]');
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
+}
+function saveLedger(items: LedgerItem[]) { localStorage.setItem(LKEY, JSON.stringify(items.slice(0, 300))); }
 
 const COURT_LABEL: Record<CourtId, string> = {
   jm: 'JM · न्यायिक मजिस्ट्रेट',
@@ -44,18 +62,18 @@ const KIND_ICON: Record<FileKind, string> = { pdf: '📕', docx: '📘', doc: '�
 
 interface PrintJob { kind: 'docx' | 'raw'; title: string; margin: string; data?: ArrayBuffer; html?: string }
 
-export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
+export default function ClerkPane({ toast, editor }: { toast: (m: string) => void; editor: Editor | null }) {
   const { t } = useI18n();
   const [entries, setEntries] = useState<ClerkEntry[]>([]);
   const [ledger, setLedger] = useState<LedgerItem[]>(loadLedger);
   const [busy, setBusy] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState('');
+  const [query, setQuery] = useState('');
   const [job, setJob] = useState<PrintJob | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
   const renderRef = useRef<HTMLDivElement>(null);
 
-  /* render docx preview into the print portal */
   useEffect(() => {
     if (job?.kind === 'docx' && job.data && renderRef.current) {
       renderRef.current.innerHTML = '';
@@ -79,14 +97,87 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
       try {
         const res = await readFileSmart(e.file, (p) => patchEntry(e.id, { progress: p }));
         patchEntry(e.id, { status: 'ok', res, progress: undefined });
-        const led = [{ name: e.name, court: res.cls.court, at: Date.now(), ocr: res.ocr }, ...loadLedger()];
+        const m = res.meta;
+        const item: LedgerItem = {
+          name: e.name, court: res.cls.court, at: Date.now(), ocr: res.ocr,
+          caseNo: m.caseNo, firNo: m.firNo, psName: m.psName, sections: m.sections.length ? m.sections : undefined,
+          title: m.title, nextDate: m.nextDate, decidedDate: m.decidedDate, docType: m.docType, advocate: m.advocate,
+        };
+        const led = [item, ...loadLedger().filter((l) => l.name !== e.name)];
         saveLedger(led); setLedger(led);
       } catch {
         patchEntry(e.id, { status: 'err', progress: undefined });
       }
     }
     setScanNote('');
+    toast(t('clerkScanDone'));
   };
+
+  /* ---------- register export (ledger = persistent knowledge) ---------- */
+  const rowsFor = (items: LedgerItem[]) => items;
+  const exportCsv = () => {
+    const head = ['Court', 'File', 'Title/Parties', 'Case No', 'FIR No', 'Police Station', 'Sections', 'Doc type', 'Next date', 'Decided', 'Advocate', 'OCR', 'Scanned at'];
+    const esc = (v?: string) => `"${(v || '').replace(/"/g, '""')}"`;
+    const lines = [head.join(',')];
+    for (const l of rowsFor(ledger)) {
+      lines.push([COURT_LABEL[l.court].split(' · ')[0], l.name, l.title, l.caseNo, l.firNo, l.psName,
+        (l.sections || []).join(' '), l.docType, l.nextDate, l.decidedDate, l.advocate, l.ocr ? 'yes' : 'no',
+        new Date(l.at).toISOString()].map((x) => esc(x === undefined ? '' : String(x))).join(','));
+    }
+    saveAs(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }), 'court-register.csv');
+    toast('CSV ✓');
+  };
+  const exportRegisterDocx = async () => {
+    const kids: (Paragraph | Table)[] = [new Paragraph({
+      alignment: AlignmentType.CENTER, heading: HeadingLevel.HEADING_1,
+      children: [new TextRun({ text: 'COURT-WISE DOCUMENT REGISTER / न्यायालय-वार दस्तावेज़ रजिस्टर', bold: true, size: 30 })],
+    })];
+    for (const c of COURT_ORDER) {
+      const items = ledger.filter((l) => l.court === c);
+      if (!items.length) continue;
+      kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: `${COURT_LABEL[c]} (${items.length})`, bold: true, size: 26 })] }));
+      const rows = [new TableRow({
+        tableHeader: true,
+        children: ['File', 'Parties', 'Case No', 'FIR/PS', 'Sections', 'Type', 'Next date'].map((h) =>
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 18 })] })] })),
+      })];
+      for (const l of items) {
+        rows.push(new TableRow({
+          children: [l.name, l.title || '', l.caseNo || '', [l.firNo, l.psName].filter(Boolean).join(' · '),
+            (l.sections || []).join(', '), l.docType || '', l.nextDate ? fmtDate(l.nextDate) : ''].map((v) =>
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(v), size: 18 })] })] })),
+        }));
+      }
+      kids.push(new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+      kids.push(new Paragraph({ children: [new TextRun('')] }));
+    }
+    const doc = new Document({ creator: 'Writer Pro Smart Clerk', title: 'Court register', sections: [{ properties: {}, children: kids }] });
+    saveAs(await Packer.toBlob(doc), 'court-register.docx');
+    toast('DOCX ✓');
+  };
+
+  /* ---------- agenda: upcoming hearing dates from ledger ---------- */
+  const agenda = useMemo(() => {
+    const now = new Date();
+    return ledger
+      .filter((l) => l.nextDate)
+      .map((l) => ({ l, d: daysUntil(l.nextDate!) }))
+      .filter((x) => x.d >= 0 && x.d <= 30)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 12);
+  }, [ledger]);
+
+  /* ---------- search filter ---------- */
+  const q = query.trim().toLowerCase();
+  const matches = (e: ClerkEntry) => !q || [e.name, e.res?.cls.court, e.res?.meta.caseNo, e.res?.meta.firNo,
+    e.res?.meta.title, e.res?.meta.psName, e.res?.meta.docType, ...(e.res?.meta.sections || [])]
+    .some((v) => v && String(v).toLowerCase().includes(q));
+
+  const grouped = COURT_ORDER.map((c) => ({
+    court: c,
+    rows: entries.filter((e) => e.status === 'ok' && e.res?.cls.court === c && matches(e)),
+  })).filter((g) => g.rows.length);
+  const working = entries.filter((e) => e.status !== 'ok');
 
   const doPrint = () => {
     if (!job) return;
@@ -141,11 +232,13 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
     }
   };
 
-  const grouped = COURT_ORDER.map((c) => ({
-    court: c,
-    rows: entries.filter((e) => (e.status === 'ok' ? e.res?.cls.court === c : false)),
-  })).filter((g) => g.rows.length);
-  const working = entries.filter((e) => e.status !== 'ok');
+  const openDraft = (e: ClerkEntry) => {
+    if (!editor) { toast('—'); return; }
+    const text = e.res?.text || '';
+    if (!text.trim()) { toast(t('clerkErr')); return; }
+    insertTextAtCursor(editor, text);
+    toast(t('clerkDrafted'));
+  };
 
   return (
     <div className="pane clerk-pane">
@@ -154,9 +247,6 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
       <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
         <button className="btn primary" onClick={() => fileRef.current?.click()}>📁 {t('clerkFiles')}</button>
         <button className="btn" onClick={() => dirRef.current?.click()}>🗂 {t('clerkFolder')}</button>
-        {ledger.length > 0 && (
-          <button className="btn ghost" onClick={() => { saveLedger([]); setLedger([]); }}>{t('clerkClear')}</button>
-        )}
       </div>
       <input ref={fileRef} type="file" multiple style={{ display: 'none' }}
         accept=".pdf,.doc,.docx,.txt,.md,.html,.htm,.png,.jpg,.jpeg,.webp"
@@ -166,6 +256,33 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
         webkitdirectory="" directory=""
         onChange={(ev) => { const fs = [...(ev.target.files || [])].filter((f) => kindOf(f.name) !== 'other'); if (fs.length) void scan(fs); ev.target.value = ''; }} />
 
+      {ledger.length > 0 && (
+        <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+          <button className="btn" onClick={exportCsv}>⬇ {t('clerkExportCsv')}</button>
+          <button className="btn" onClick={() => void exportRegisterDocx()}>⬇ {t('clerkExportDocx')}</button>
+          <button className="btn ghost" onClick={() => { saveLedger([]); setLedger([]); }}>{t('clerkClear')}</button>
+          <span className="muted small" style={{ alignSelf: 'center' }}>{ledger.length} {t('clerkLedgerCount')}</span>
+        </div>
+      )}
+
+      {agenda.length > 0 && (
+        <div className="clerk-agenda">
+          <b>📅 {t('clerkAgenda')}</b>
+          {agenda.map(({ l, d }, i) => (
+            <div className={`ag-row ${d === 0 ? 'today' : d <= 3 ? 'soon' : d <= 7 ? 'week' : ''}`} key={i}>
+              <span className="ag-date">{d === 0 ? t('clerkToday') : fmtDate(l.nextDate)}</span>
+              <span className="ag-body">
+                <b>{COURT_LABEL[l.court].split(' · ')[0]}</b> {l.caseNo || l.name}
+                {l.title && <span className="muted small"> · {l.title}</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {(entries.length > 0 || q) && (
+        <input className="clerk-search" placeholder={`🔍 ${t('clerkSearch')}`} value={query} onChange={(e) => setQuery(e.target.value)} />
+      )}
       {scanNote && <div className="clerk-progress">⏳ {t('clerkReading')} {scanNote}</div>}
 
       {grouped.map((g) => (
@@ -174,7 +291,7 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
             <b>{COURT_LABEL[g.court]}</b><span className="cnt">{g.rows.length}</span>
           </div>
           {g.rows.map((e) => (
-            <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} />
+            <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor} />
           ))}
         </div>
       ))}
@@ -182,7 +299,7 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
       {working.length > 0 && (
         <div className="court-group">
           <div className="court-head work"><b>{t('clerkReading')}</b><span className="cnt">{working.length}</span></div>
-          {working.map((e) => <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} />)}
+          {working.map((e) => <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor} />)}
         </div>
       )}
 
@@ -197,7 +314,13 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
               <div key={c} className="ledger-court">
                 <div className={`court-head ${c}`}><b>{COURT_LABEL[c]}</b><span className="cnt">{items.length}</span></div>
                 {items.slice(0, 8).map((l, i) => (
-                  <div className="ledger-row" key={i}>📄 {l.name} <span className="muted small">· {new Date(l.at).toLocaleDateString()}{l.ocr ? ' · OCR' : ''}</span></div>
+                  <div className="ledger-row" key={i}>
+                    📄 {l.name}
+                    <span className="muted small">
+                      {' '}· {[l.caseNo && `Case ${l.caseNo}`, l.firNo && `FIR ${l.firNo}`, l.nextDate && `⏰ ${fmtDate(l.nextDate)}`, l.docType]
+                        .filter(Boolean).join(' · ') || new Date(l.at).toLocaleDateString()}
+                    </span>
+                  </div>
                 ))}
               </div>
             );
@@ -225,12 +348,24 @@ export default function ClerkPane({ toast }: { toast: (m: string) => void }) {
   );
 }
 
-function ClerkRow({ e, busy, onConvert }: {
-  e: ClerkEntry; busy: string | null; onConvert: (e: ClerkEntry, t: Target) => void;
+function ClerkRow({ e, busy, onConvert, onDraft, hasEditor }: {
+  e: ClerkEntry; busy: string | null; onConvert: (e: ClerkEntry, t: Target) => void; onDraft: () => void; hasEditor: boolean;
 }) {
   const { t } = useI18n();
   const isBusy = busy?.startsWith(e.id);
   const targets = e.status === 'ok' ? targetsFor(e.kind) : [];
+  const m = e.res?.meta;
+  const metaBits: [string, string | undefined][] = m ? [
+    [t('clerkMetaTitle'), m.title],
+    [t('clerkMetaCase'), m.caseNo],
+    [t('clerkMetaFir'), m.firNo],
+    [t('clerkMetaPs'), m.psName],
+    [t('clerkMetaSec'), m.sections.length ? m.sections.join(', ') : undefined],
+    [t('clerkMetaType'), m.docType],
+    [t('clerkMetaNext'), m.nextDate ? fmtDate(m.nextDate) : undefined],
+    [t('clerkMetaDecided'), m.decidedDate ? fmtDate(m.decidedDate) : undefined],
+    [t('clerkMetaAdv'), m.advocate],
+  ] : [];
   return (
     <div className="clerk-row">
       <div className="cr-main">
@@ -246,12 +381,22 @@ function ClerkRow({ e, busy, onConvert }: {
             {e.res.note === 'legacy-doc' && <span className="badge warn">{t('clerkLegacy')}</span>}
             {e.res.cls.court !== 'misc' && <span className="badge ok">{e.res.cls.confidence}% {t('clerkConf')}</span>}
             {e.res.cls.court === 'misc' && <span className="badge misc">{t('clerkMiscBadge')}</span>}
+            {m?.nextDate && daysUntil(m.nextDate) >= 0 && daysUntil(m.nextDate) <= 7 && (
+              <span className="badge alert">⏰ {fmtDate(m.nextDate)}</span>
+            )}
           </div>
           {e.res.cls.snippet && <div className="cr-snippet muted small">“{e.res.cls.snippet}”</div>}
+          {metaBits.some(([, v]) => v) && (
+            <div className="cr-meta">
+              {metaBits.filter(([, v]) => v).map(([k, v]) => (
+                <span key={k}><em>{k}</em> {v}</span>
+              ))}
+            </div>
+          )}
         </>
       )}
       {e.status === 'err' && <div className="cr-badges"><span className="badge warn">{t('clerkErr')}</span></div>}
-      {targets.length > 0 && (
+      {(targets.length > 0 || (e.status === 'ok' && hasEditor && e.res?.text)) && (
         <div className="row cr-conv" style={{ flexWrap: 'wrap', gap: 4 }}>
           <span className="muted small">🔄</span>
           {targets.map((tg) => (
@@ -259,6 +404,9 @@ function ClerkRow({ e, busy, onConvert }: {
               {isBusy && busy === `${e.id}:${tg}` ? '⏳' : '→'} {TARGET_LABEL[tg]}
             </button>
           ))}
+          {e.status === 'ok' && hasEditor && e.res?.text && (
+            <button className="btn tiny accent" onClick={onDraft}>✍ {t('clerkOpenDraft')}</button>
+          )}
         </div>
       )}
     </div>

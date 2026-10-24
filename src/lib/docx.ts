@@ -4,6 +4,7 @@ import {
 import type { JSONContent } from '@tiptap/core';
 import { DocRecord } from '../types';
 import { numberingPrefixes } from '../editor/insert';
+import { FONT_BY_ID } from '../data/fonts';
 
 const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> = {
   center: AlignmentType.CENTER,
@@ -13,14 +14,17 @@ const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> 
 };
 
 function csFont(doc: DocRecord): string {
-  return doc.settings.fontHi === 'aparajita' ? 'Aparajita' : 'Mangal';
+  return FONT_BY_ID[doc.settings.fontHi]?.docx ?? 'Mangal';
+}
+function enFont(doc: DocRecord): string {
+  return FONT_BY_ID[doc.settings.fontEn]?.docx ?? 'Times New Roman';
 }
 
 function runsOf(node: JSONContent, doc: DocRecord, prefix = ''): TextRun[] {
   const s = doc.settings;
   const base = {
     size: s.fontSizePt * 2,
-    font: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: csFont(doc), eastAsia: csFont(doc) },
+    font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) },
   };
   const runs: TextRun[] = [];
   if (prefix) runs.push(new TextRun({ text: prefix, bold: true, ...base }));
@@ -109,10 +113,10 @@ export async function exportDocx(doc: DocRecord, json: JSONContent): Promise<Blo
     sections: [{ properties: { page: { size, margin } }, children }],
     styles: {
       default: {
-        document: { run: { size: s.fontSizePt * 2, font: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading1: { run: { size: (s.fontSizePt + 2) * 2, bold: true, font: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading2: { run: { size: (s.fontSizePt + 1) * 2, bold: true, font: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading3: { run: { size: s.fontSizePt * 2, bold: true, font: { ascii: 'Times New Roman', hAnsi: 'Times New Roman', cs: csFont(doc), eastAsia: csFont(doc) } } },
+        document: { run: { size: s.fontSizePt * 2, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
+        heading1: { run: { size: (s.fontSizePt + 2) * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
+        heading2: { run: { size: (s.fontSizePt + 1) * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
+        heading3: { run: { size: s.fontSizePt * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
       },
     },
   });

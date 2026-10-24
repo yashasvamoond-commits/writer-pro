@@ -8,11 +8,15 @@ import { DEFAULT_SETTINGS, DocRecord, CaseInfo, PageSettings } from './types';
 import { listDocs, newDoc, putDoc } from './lib/storage';
 import { applyPageRule, printNow } from './lib/print';
 import { applyVariables, insertTextAtCursor } from './lib/editor-ops';
+import { FONT_BY_ID } from './data/fonts';
 
 const PAGE_DIM: Record<string, [number, number]> = { A4: [794, 1123], LEGAL: [816, 1344] };
 
 export default function App() {
-  const [doc, setDoc] = useState<DocRecord>(() => listDocs()[0] || newDoc('Untitled draft'));
+  const [doc, setDoc] = useState<DocRecord>(() => {
+    const d = listDocs()[0] || newDoc('Untitled draft');
+    return { ...d, settings: { ...DEFAULT_SETTINGS, ...d.settings } };
+  });
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tab, setTab] = useState('templates');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -54,14 +58,8 @@ export default function App() {
     root.style.setProperty('--fs-pt', `${settings.fontSizePt}pt`);
     root.style.setProperty('--fs-px', `${fsPx}px`);
     root.style.setProperty('--lh', `${Math.round(fsPx * settings.lineHeight)}px`);
-    root.style.setProperty(
-      '--font-hi',
-      settings.fontHi === 'mangal'
-        ? "'Mangal','Noto Sans Devanagari','Mukta',sans-serif"
-        : settings.fontHi === 'aparajita'
-          ? "'Aparajita','Noto Sans Devanagari','Mukta',sans-serif"
-          : "'Mukta','Noto Sans Devanagari','Mangal',sans-serif",
-    );
+    root.style.setProperty('--font-hi', FONT_BY_ID[settings.fontHi]?.stack || FONT_BY_ID.mukta.stack);
+    root.style.setProperty('--font-en', FONT_BY_ID[settings.fontEn]?.stack || FONT_BY_ID.tinos.stack);
     applyPageRule(settings);
   }, [settings]);
 
@@ -92,7 +90,7 @@ export default function App() {
   }, [editor]);
 
   const openDoc = useCallback((d: DocRecord) => {
-    setDoc(d);
+    setDoc({ ...d, settings: { ...DEFAULT_SETTINGS, ...d.settings } });
     // remount editor with the new content
     setEditor(null);
     window.setTimeout(() => setEditorKey((k) => k + 1), 0);
@@ -120,7 +118,8 @@ export default function App() {
         onDocs={() => setDocsOpen(true)}
         onExport={() => setExportOpen(true)}
         onSheet={() => setSheet(true)}
-        onSidebar={(t) => { setTab(t); setSidebarOpen(true); }}
+        onSidebar={(t) => { if (t === '') setSidebarOpen((v) => !v); else { setTab(t); setSidebarOpen(true); } }}
+        sidebarOpen={sidebarOpen}
         onPrint={() => printNow()}
         toast={toast}
       />
@@ -129,6 +128,9 @@ export default function App() {
           <Sidebar
             tab={tab}
             setTab={setTab}
+            onClose={() => setSidebarOpen(false)}
+            settings={settings}
+            patch={patch}
             editor={editor}
             vars={doc.variables}
             onVars={onVars}
@@ -137,6 +139,11 @@ export default function App() {
             onCauseTitle={() => setCauseOpen(true)}
             toast={toast}
           />
+          )}
+        {!sidebarOpen && (
+          <button className="edge-handle" onClick={() => setSidebarOpen(true)} title="Open panels / पैनल खोलें">
+            PANELS · पैनल
+          </button>
         )}
         <div className="desk">
           <div className={`sheet ${settings.guides ? 'guides' : ''}`}>

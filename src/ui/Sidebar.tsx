@@ -8,6 +8,7 @@ import { parseCaseFile, sortByNextDate, caseLabel } from '../lib/cases';
 import { checkGrammar, GrammarIssue } from '../lib/grammar';
 import { CaseInfo, PageSettings } from '../types';
 import { useI18n } from '../data/i18n';
+import ClerkPane from './ClerkPane';
 
 interface Props {
   tab: string;
@@ -26,6 +27,7 @@ interface Props {
 }
 
 const TABS: [string, string, string][] = [
+  ['clerk', 'sideClerk', '🧑‍⚖'],
   ['templates', 'sideTemplates', '🏛'],
   ['fonts', 'sideFonts', '🔤'],
   ['variables', 'sideVars', '🧩'],
@@ -59,6 +61,7 @@ export default function Sidebar(props: Props) {
         ))}
       </div>
       <div className="pane">
+        {tab === 'clerk' && <ClerkPane toast={props.toast} />}
         {tab === 'templates' && <TemplatesPane insert={insert} onCauseTitle={props.onCauseTitle} editor={props.editor} vars={props.vars} toast={props.toast} />}
         {tab === 'fonts' && <FontsPane settings={props.settings} patch={props.patch} />}
         {tab === 'variables' && <VariablesPane vars={props.vars} onVars={props.onVars} />}

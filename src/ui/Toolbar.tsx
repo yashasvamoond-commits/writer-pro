@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { PageSettings } from '../types';
-import { currentPlev, setPlev, toggleLang, convertScope, insertCourtHeader, insertNotesList } from '../lib/editor-ops';
+import { currentPlev, setPlev, toggleLang, convertScope, insertCourtHeader, insertNotesList, setIndent } from '../lib/editor-ops';
 import { JURISDICTIONS } from '../lib/templates';
 import { useI18n } from '../data/i18n';
 
@@ -21,6 +21,10 @@ interface Props {
   onFN: () => void;
   onLink: () => void;
   onOcr: () => void;
+  onSymbols: () => void;
+  onTextBox: () => void;
+  onTOC: () => void;
+  onVersion: () => void;
   toast: (m: string) => void;
 }
 
@@ -45,6 +49,39 @@ export default function Toolbar(p: Props) {
   const { t, lang } = useI18n();
   const imgRef = useRef<HTMLInputElement>(null);
   const { editor, settings, patch } = p;
+  const [painterArmed, setPainterArmed] = useState(false);
+  const painterRef = useRef<{ color: string | null; highlight: string | null; bold: boolean; italic: boolean; underline: boolean } | null>(null);
+
+  const armPainter = () => {
+    if (!editor || painterArmed) return;
+    const st = editor.state;
+    const marks = st.selection.$from.marks();
+    const has = (n: string) => marks.some((m) => m.type.name === n);
+    painterRef.current = {
+      color: (editor.getAttributes('textStyle').color as string) || null,
+      highlight: (editor.getAttributes('highlight').color as string) || null,
+      bold: has('bold'), italic: has('italic'), underline: has('underline'),
+    };
+    setPainterArmed(true);
+    const h = () => {
+      const e = editor;
+      const pt = painterRef.current;
+      if (!e || !pt) return;
+      if (e.state.selection.empty) return;
+      let c = e.chain().focus();
+      if (pt.bold) c = c.setBold();
+      if (pt.italic) c = c.setItalic();
+      if (pt.underline) c = c.setUnderline();
+      if (pt.color) c = c.setColor(pt.color);
+      if (pt.highlight) c = c.setHighlight({ color: pt.highlight });
+      c.run();
+      painterRef.current = null;
+      setPainterArmed(false);
+      e.off('selectionUpdate', h);
+    };
+    editor.on('selectionUpdate', h);
+  };
+
   if (!editor) return null;
   const plev = currentPlev(editor);
   const paraLang = editor.getAttributes('paragraph')?.lang || 'en';
@@ -74,6 +111,7 @@ export default function Toolbar(p: Props) {
             <button onClick={() => { p.onDocs(); close(); }}>📁 {t('drafts')}</button>
             <button onClick={() => { p.onExport(); close(); }}>⬇ {t('exportMenu')}</button>
             <button onClick={() => { p.onPrint(); close(); }}>🖨 {t('print')}</button>
+            <button onClick={() => { p.onVersion(); close(); }}>🕘 {t('history')}</button>
           </>
         )}
       </Menu>
@@ -113,12 +151,38 @@ export default function Toolbar(p: Props) {
       </Menu>
       <span className="sep" />
 
-      <select className="tbtn" value={settings.fontSizePt} onChange={(e) => patch({ fontSizePt: Number(e.target.value) })} title={t('fontSize')}>
-        {[12, 13, 14, 15, 16].map((n) => <option key={n} value={n}>{n} pt</option>)}
+      <select className="tbtn" title={t('blockType')} value={editor.isActive('heading', { level: 1 }) ? 'H1' : editor.isActive('heading', { level: 2 }) ? 'H2' : editor.isActive('heading', { level: 3 }) ? 'H3' : editor.isActive('blockquote') ? 'Q' : 'P'}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === 'P') editor.chain().focus().setParagraph().run();
+          else if (v === 'Q') editor.chain().focus().toggleBlockquote().run();
+          else editor.chain().focus().setHeading({ level: Number(v.slice(1)) as 1 | 2 | 3 }).run();
+        }}>
+        <option value="P">{t('styleNormal')}</option>
+        <option value="H1">{t('styleH1')}</option>
+        <option value="H2">{t('styleH2')}</option>
+        <option value="H3">{t('styleH3')}</option>
+        <option value="Q">{t('styleQuote')}</option>
       </select>
-      <select className="tbtn" value={settings.lineHeight} onChange={(e) => patch({ lineHeight: Number(e.target.value) as 1.5 | 2 })} title={t('lineSp')}>
-        <option value={1.5}>1.5</option>
-        <option value={2}>2.0</option>
+      <select className="tbtn" value={settings.fontSizePt} onChange={(e) => patch({ fontSizePt: Number(e.target.value) })} title={t('fontSize')}>
+        {[10, 11, 12, 13, 14, 15, 16, 18, 20, 24].map((n) => <option key={n} value={n}>{n} pt</option>)}
+      </select>
+      <select className="tbtn" value={settings.lineHeight} onChange={(e) => patch({ lineHeight: Number(e.target.value) })} title={t('lineSp')}>
+        {[1, 1.15, 1.5, 1.75, 2, 2.5, 3].map((lh) => <option key={lh} value={lh}>{lh.toFixed(2)}</option>)}
+      </select>
+      <span className="sep" />
+      <button className="tbtn" onClick={() => setIndent(editor, 1)} title={t('indentIn')}>»</button>
+      <button className="tbtn" onClick={() => setIndent(editor, -1)} title={t('indentOut')}>«</button>
+      <input type="color" className="tbtn tb-color" defaultValue="#c0392b" title={t('textColor')} onChange={(e) => editor.chain().focus().setColor(e.target.value).run()} />
+      <input type="color" className="tbtn tb-color" defaultValue="#fff176" title={t('highlight')} onChange={(e) => editor.chain().focus().setHighlight({ color: e.target.value }).run()} />
+      <button className={`tbtn ${editor.isActive('superscript') ? 'on' : ''}`} onClick={() => editor.chain().focus().toggleSuperscript().run()} title={t('sup')}>x²</button>
+      <button className={`tbtn ${editor.isActive('subscript') ? 'on' : ''}`} onClick={() => editor.chain().focus().toggleSubscript().run()} title={t('sub')}>x₂</button>
+      <button className={`tbtn ${painterArmed ? 'on' : ''}`} onClick={armPainter} title={t('painter')}>🖌</button>
+      <span className="sep" />
+      <select className="tbtn" value={settings.columns} onChange={(e) => patch({ columns: Number(e.target.value) as 1 | 2 | 3 })} title={t('columns')}>
+        <option value={1}>{t('col1')}</option>
+        <option value={2}>{t('col2')}</option>
+        <option value={3}>{t('col3')}</option>
       </select>
 
       <Menu label={`👁 ${t('view')}`} title={t('view')}>
@@ -134,7 +198,7 @@ export default function Toolbar(p: Props) {
             <button onClick={() => { patch({ grammar: !settings.grammar }); close(); }}>{t('grammar')} {settings.grammar ? '✓' : ''}</button>
             <hr />
             <button onClick={() => { p.onSidebar('fonts'); close(); }}>🔤 {t('fontLib')}</button>
-            <button onClick={() => { p.onHF(); close(); }}>📄 {t('headerFooter')}</button>
+            <button onClick={() => { p.onHF(); close(); }}>📄 {t('pageSetup')}</button>
             <button onClick={() => { p.onFR(); close(); }}>🔍 {t('find')}</button>
           </>
         )}
@@ -162,6 +226,11 @@ export default function Toolbar(p: Props) {
             <button onClick={() => { p.onLink(); close(); }}>🔗 {t('link')}</button>
             <button onClick={() => { p.onFN(); close(); }}>📝 {t('footnote')}</button>
             <button onClick={() => { insertNotesList(editor) ? p.toast(t('tInserted')) : p.toast('—'); close(); }}>📚 {t('notesList')}</button>
+            <hr />
+            <button onClick={() => { p.onSymbols(); close(); }}>Ω {t('symbols')}</button>
+            <button onClick={() => { p.onTextBox(); close(); }}>🗗 {t('textBox')}</button>
+            <button onClick={() => { p.onTOC(); close(); }}>🗒 {t('toc')}</button>
+            <button onClick={() => { editor.chain().focus().insertContent(new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })).run(); p.toast(t('tInserted')); close(); }}>📅 {t('todayDate')}</button>
             <hr />
             <button onClick={() => { p.onSheet(); close(); }}>🖋 {t('affidavit')}</button>
           </>

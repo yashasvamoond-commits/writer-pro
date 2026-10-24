@@ -50,6 +50,11 @@ export const CourtParagraph = Paragraph.extend({
         parseHTML: (el) => Number(el.getAttribute('data-plev') || 0),
         renderHTML: (a) => (a.plev ? { 'data-plev': String(a.plev) } : {}),
       },
+      indent: {
+        default: 0,
+        parseHTML: (el) => Number(el.getAttribute('data-indent') || 0),
+        renderHTML: (a) => (a.indent ? { 'data-indent': String(a.indent) } : {}),
+      },
     };
   },
 });

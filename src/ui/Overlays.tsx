@@ -7,7 +7,7 @@ import { appendBlocks, findRanges, nextFootnoteNumber, replaceAll } from '../lib
 import { krutiDevToUnicode } from '../lib/krutidev';
 import { exportDocx } from '../lib/docx';
 import { DocRecord, PageSettings } from '../types';
-import { deleteDoc, duplicateDoc, listDocs, newDoc, putDoc } from '../lib/storage';
+import { deleteDoc, duplicateDoc, listDocs, listVersions, newDoc, pushVersion, putDoc } from '../lib/storage';
 import { useI18n } from '../data/i18n';
 
 /* ---------------- Bottom sheet: verification / affidavit ---------------- */
@@ -179,8 +179,9 @@ export function ExportModal({ open, onClose, editor, doc, onPrint, toast }: {
 }
 
 /* ---------------- Drafts manager ---------------- */
-export function DocsModal({ open, onClose, currentId, onOpen, toast }: {
+export function DocsModal({ open, onClose, currentId, onOpen, toast, currentDoc, onRestore }: {
   open: boolean; onClose: () => void; currentId: string; onOpen: (d: DocRecord) => void; toast: (m: string) => void;
+  currentDoc: DocRecord; onRestore: (content: unknown) => void;
 }) {
   const { t } = useI18n();
   const [refresh, setRefresh] = useState(0);
@@ -194,7 +195,19 @@ export function DocsModal({ open, onClose, currentId, onOpen, toast }: {
         <div className="mbody">
           <div className="row" style={{ marginBottom: 8 }}>
             <button className="btn primary" onClick={() => { const d = newDoc(); onOpen(d); onClose(); }}>{t('newDraft')}</button>
+            <button className="btn" onClick={() => { pushVersion(currentDoc, t('manualSnap')); setRefresh(refresh + 1); toast('🕘 ✓'); }}>{t('snapshot')}</button>
           </div>
+          {listVersions(currentId).length > 0 && (
+            <div className="case-row" style={{ marginBottom: 8 }}>
+              <b>🕘 {t('history')} — {currentDoc.title}</b>
+              {listVersions(currentId).map((v) => (
+                <div className="row" key={v.id} style={{ marginTop: 4 }}>
+                  <span className="muted" style={{ flex: 1 }}>{v.label} · {new Date(v.at).toLocaleString()}</span>
+                  <button className="btn" onClick={() => { onRestore(v.content); onClose(); }}>{t('restore')}</button>
+                </div>
+              ))}
+            </div>
+          )}
           {docs.map((d) => (
             <div className="case-row" key={d.id}>
               <b>{d.title}</b> {d.id === currentId && <span className="tag">open</span>}
@@ -221,6 +234,7 @@ export function HeaderFooterModal({ open, onClose, settings, patch }: {
   const { t } = useI18n();
   const [h, setH] = useState(settings.headerText);
   const [f, setF] = useState(settings.footerText);
+  const [w, setW] = useState(settings.watermark);
   if (!open) return null;
   return (
     <div className="modal-back">
@@ -229,10 +243,21 @@ export function HeaderFooterModal({ open, onClose, settings, patch }: {
         <div className="mbody">
           <div className="field"><label>{t('hfHeader')}</label><textarea rows={2} value={h} onChange={(e) => setH(e.target.value)} /></div>
           <div className="field"><label>{t('hfFooter')}</label><textarea rows={2} value={f} onChange={(e) => setF(e.target.value)} /></div>
+          <div className="field"><label>{t('watermark')}</label>
+            <input value={w} onChange={(e) => setW(e.target.value)} placeholder="DRAFT / प्रारूप" />
+          </div>
+          <div className="field"><label>{t('columns')}</label>
+            <div className="row">
+              {([1, 2, 3] as const).map((c) => (
+                <button key={c} className={`btn ${settings.columns === c ? 'primary' : ''}`} onClick={() => patch({ columns: c })}>{t(`col${c}`)}</button>
+              ))}
+            </div>
+          </div>
+          <label className="checkrow"><input type="checkbox" checked={settings.pageNumbers} onChange={(e) => patch({ pageNumbers: e.target.checked })} /> {t('pageNumbers')}</label>
         </div>
         <footer>
           <button className="btn ghost" onClick={onClose}>{t('cancel')}</button>
-          <button className="btn primary" onClick={() => { patch({ headerText: h, footerText: f }); onClose(); }}>{t('save')}</button>
+          <button className="btn primary" onClick={() => { patch({ headerText: h, footerText: f, watermark: w }); onClose(); }}>{t('save')}</button>
         </footer>
       </div>
     </div>
@@ -370,6 +395,29 @@ export function OcrModal({ open, onClose, editor, onWords, toast }: {
             <button className="btn primary" disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? t('ocrWorking') : `📷 ${t('ocrRun')}`}
             </button>
+          </div>
+        </div>
+        <footer><button className="btn ghost" onClick={onClose}>{t('close')}</button></footer>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Symbols palette ---------------- */
+const SYMBOLS = ['§','¶','©','®','™','†','‡','•','…','—','–','‘','’','“','”','₹','॰','।','॥','√','×','÷','±','≤','≥','≠','°','µ','α','β','γ','Δ','π','Ω','№','⚖','✓','✕','≈','∞','½','⅓','¼','¾'];
+
+export function SymbolsModal({ open, onClose, editor, toast }: { open: boolean; onClose: () => void; editor: Editor | null; toast: (m: string) => void }) {
+  const { t } = useI18n();
+  if (!open) return null;
+  return (
+    <div className="modal-back">
+      <div className="modal">
+        <header>{t('symbols')}</header>
+        <div className="mbody">
+          <div className="sym-grid">
+            {SYMBOLS.map((sy) => (
+              <button key={sy} onClick={() => { editor?.chain().focus().insertContent(sy).run(); toast(sy + ' ✓'); }}>{sy}</button>
+            ))}
           </div>
         </div>
         <footer><button className="btn ghost" onClick={onClose}>{t('close')}</button></footer>

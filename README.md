@@ -40,6 +40,15 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v5 — free layout & full Word-style toolkit)
+
+- **Free text boxes** — drag anywhere on the page, resize from the corner, per-box font size & alignment; they print exactly where you place them and ride along in DOCX export.
+- **Block arrange gutter** — floating ↑ ↓ / duplicate / delete controls next to any paragraph or heading: rearrange the document without cut-paste.
+- **Word-style formatting** — paragraph styles (Normal/H1–H3/Quote), 8-level paragraph indent, 7 line-spacing steps, text colour, multi-colour highlight, superscript/subscript, **format painter**.
+- **Page layout** — 1/2/3-column flow (screen + DOCX sections), watermark (prints on every page), footer page numbers in DOCX, extended font sizes 10–24 pt.
+- **Insert toolbox+** — 44-symbol palette (₹ ॰ । ॥ § ¶ © …), one-click table of contents from headings, today's date.
+- **Version history** — snapshots before every export plus manual snapshots (up to 20 per draft), one-tap restore from File ▸ Drafts.
+
 ## Feature highlights (v4 — tablet & polish)
 
 - **Tablet / touch-optimised layout**: 44px+ touch targets, wider panels,

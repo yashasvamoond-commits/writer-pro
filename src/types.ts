@@ -2,7 +2,7 @@ export type PageSize = 'A4' | 'LEGAL';
 
 export interface PageSettings {
   pageSize: PageSize;
-  lineHeight: 1.5 | 2.0;
+  lineHeight: number;
   fontSizePt: number; // court standard: 14
   marginL: number; // inches — 1.75 for stitching
   marginR: number;
@@ -14,6 +14,9 @@ export interface PageSettings {
   uiLang: 'en' | 'hi'; // dedicated software-language switch (never parallel)
   headerText: string;
   footerText: string;
+  columns: 1 | 2 | 3;
+  watermark: string;
+  pageNumbers: boolean;
   guides: boolean;
   spellcheck: boolean;
 }
@@ -32,9 +35,24 @@ export const DEFAULT_SETTINGS: PageSettings = {
   uiLang: 'en',
   headerText: '',
   footerText: '',
+  columns: 1,
+  watermark: '',
+  pageNumbers: true,
   guides: true,
   spellcheck: true,
 };
+
+export interface TextBox {
+  id: string;
+  xPct: number; // % of sheet width
+  yPct: number; // % of sheet height
+  wPct: number;
+  hPx: number;
+  text: string;
+  sizePt: number;
+  align: 'left' | 'center' | 'right';
+  lang: 'hi' | 'en';
+}
 
 export interface DocRecord {
   id: string;
@@ -45,6 +63,7 @@ export interface DocRecord {
   content: unknown;
   settings: PageSettings;
   variables: Record<string, string>;
+  textBoxes?: TextBox[];
 }
 
 export interface CaseInfo {

@@ -139,3 +139,60 @@ export function replaceAll(editor: Editor, query: string, replacement: string): 
   for (const r of ranges) editor.commands.insertContentAt({ from: r.from, to: r.to }, replacement);
   return ranges.length;
 }
+
+/* ---------------- free block arrangement (Word-style) ---------------- */
+export function moveBlock(editor: Editor, dir: -1 | 1): boolean {
+  const { tr, doc } = editor.state;
+  const { $from } = editor.state.selection;
+  if ($from.depth < 1) return false;
+  const index = $from.index(0);
+  const target = index + dir;
+  if (target < 0 || target >= doc.childCount) return false;
+  const node = $from.node(1);
+  const start = $from.before(1);
+  tr.delete(start, start + node.nodeSize);
+  let p = 0;
+  for (let i = 0; i < Math.min(target, tr.doc.childCount); i++) p += tr.doc.child(i).nodeSize;
+  tr.insert(p, node);
+  editor.view.dispatch(tr);
+  return true;
+}
+
+export function dupBlock(editor: Editor): boolean {
+  const { tr } = editor.state;
+  const { $from } = editor.state.selection;
+  if ($from.depth < 1) return false;
+  const node = $from.node(1);
+  const start = $from.before(1);
+  tr.insert(start + node.nodeSize, node.copy(node.content));
+  editor.view.dispatch(tr);
+  return true;
+}
+
+export function deleteBlock(editor: Editor): boolean {
+  const { tr } = editor.state;
+  const { $from } = editor.state.selection;
+  if ($from.depth < 1 || editor.state.doc.childCount <= 1) return false;
+  const node = $from.node(1);
+  const start = $from.before(1);
+  tr.delete(start, start + node.nodeSize);
+  editor.view.dispatch(tr);
+  return true;
+}
+
+export function setIndent(editor: Editor, delta: number) {
+  const cur = Number(editor.getAttributes('paragraph').indent || 0);
+  const next = Math.min(8, Math.max(0, cur + delta));
+  editor.chain().focus().updateAttributes('paragraph', { indent: next }).run();
+}
+
+export function tocBlocks(editor: Editor): Block[] {
+  const out: Block[] = [{ type: 'heading', level: 2, align: 'left', plev: 0, bold: true, lang: 'en', text: 'TABLE OF CONTENTS / विषय सूची' }];
+  editor.state.doc.forEach((node) => {
+    if (node.type.name === 'heading') {
+      const lvl = Number(node.attrs.level || 2);
+      out.push({ type: 'paragraph', align: 'left', plev: 0, bold: false, lang: 'en', text: `${'  '.repeat(lvl - 1)}• ${node.textContent}` });
+    }
+  });
+  return out;
+}

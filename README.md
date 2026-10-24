@@ -40,6 +40,18 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v7 — Smart Clerk: court sorter + all-in-one converter)
+
+- **🧑‍⚖ Smart clerk** (first sidebar tab): select files **or a whole folder** from the tablet — every PDF / Word / text / image document is read **on-device** and filed automatically by the court heading written inside it:
+  **JM · ACJM · ADJ · SDM · AECM**, and a **Miscellaneous** group created *only* for files that carry no court heading at all.
+  - Scanned PDFs & photos go through the bundled offline OCR (hin+eng) before classification.
+  - Each file shows the matched heading snippet + confidence, and the OCR badge when it had to be scanned.
+  - A persistent **scan ledger** remembers what was found (Android security doesn't allow keeping file access across restarts — re-select to convert).
+- **All-in-one converter** (per file, one tap, offline, format preserved as faithfully as the format allows):
+  - PDF → **Word .docx** (font sizes, alignment & page breaks carried over; scanned PDFs OCR'd into Word), PDF → TXT / HTML / **PNG pages (zip)**
+  - Word → **PDF** (docx-preview render + print engine “Save as PDF”), Word → TXT / HTML (bold, italic, underline, alignment, headings kept)
+  - TXT / HTML → PDF or Word · Images → PDF, OCR-Word, OCR-TXT
+
 ## Feature highlights (v6 — proper Page Setup dialog)
 
 - **📐 Page setup dialog** (View ▸ Page setup) with four tabs:

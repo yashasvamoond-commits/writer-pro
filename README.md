@@ -40,6 +40,10 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Fix (v10.1 — single-language template insertion)
+
+- Templates, court headers, cause titles, verification/affidavit blocks and clerk-generated drafts are authored bilingual internally; **insertion now keeps ONLY the lines of the active software language** (EN switch → English lines only; हिं switch → Hindi lines only). Language-neutral lines (numbers, `{{variable}}` chips, symbols) survive in both. Regression tests walk all 22 skeletons + all 5 court headers asserting zero leakage either way.
+
 ## Feature highlights (v10 — timelines, draft generation, WhatsApp summaries)
 
 - **🕒 Case-wise timeline** — a third clerk view groups the register into *cases* (by case no, else FIR no, per court) and lays every date of the case out in order on a colour-coded timeline: FIR registered · incident · arrest · filed/charge-sheet · hearing · decided · bail matters. Labels come from the words surrounding each date (English + Hindi), nearest-keyword wins.

@@ -310,7 +310,7 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
     if (!editor) { toast('—'); return; }
     const meta = mergedMeta(items);
     const src = bailDraftSrc(meta, court, lang);
-    appendBlocks(editor, parseBlocks(src), varsFromMeta(meta));
+    appendBlocks(editor, parseBlocks(src), varsFromMeta(meta), lang);
     toast(t('clerkDrafted'));
   };
 

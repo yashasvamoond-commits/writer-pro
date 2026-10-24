@@ -42,7 +42,7 @@ export default function Sidebar(props: Props) {
   const { tab, setTab, onClose } = props;
   const insert = (blocks: Block[]) => {
     if (!props.editor) return;
-    insertBlocksAtCursor(props.editor, blocks, props.vars);
+    insertBlocksAtCursor(props.editor, blocks, props.vars, lang);
     props.toast(t('tInserted'));
   };
 
@@ -168,7 +168,7 @@ function VariablesPane({ vars, onVars }: { vars: Record<string, string>; onVars:
 }
 
 function CasesPane({ cases, onCases, editor, vars, toast }: { cases: CaseInfo[]; onCases: (c: CaseInfo[]) => void; editor: Editor | null; vars: Record<string, string>; toast: (m: string) => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const fileRef = useRef<HTMLInputElement>(null);
   const load = (text: string) => {
     const parsed = parseCaseFile(text);
@@ -189,7 +189,7 @@ function CasesPane({ cases, onCases, editor, vars, toast }: { cases: CaseInfo[];
       `C:... Respondent / प्रतिवादी\n` +
       `C:(Next listing: ${c.nextDate || '—'} — ${c.purposeHi || c.purpose})`,
     );
-    insertBlocksAtCursor(editor, blocks, vars);
+    insertBlocksAtCursor(editor, blocks, vars, lang);
     toast(t('tCause'));
   };
   return (

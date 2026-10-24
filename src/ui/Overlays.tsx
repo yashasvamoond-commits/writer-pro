@@ -17,7 +17,7 @@ export function BottomSheet({ open, onClose, editor, vars, toast }: {
   const { t, lang } = useI18n();
   const add = (src: string, label: string) => {
     if (!editor) return;
-    appendBlocks(editor, parseBlocks(src), vars);
+    appendBlocks(editor, parseBlocks(src), vars, lang);
     toast(`${label} ✓`);
     onClose();
   };
@@ -101,7 +101,7 @@ export function CauseTitleModal({ open, onClose, editor, vars, toast }: {
       lines.push(`J:Petitioner: ${pet}`);
       lines.push(`J:Respondent: ${res}`);
     }
-    appendBlocks(editor, parseBlocks(lines.join('\n')), vars);
+    appendBlocks(editor, parseBlocks(lines.join('\n')), vars, uiLang);
     toast(t('tCause'));
     onClose();
   };

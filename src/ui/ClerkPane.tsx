@@ -20,7 +20,10 @@ import type { Editor } from '@tiptap/react';
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { useI18n } from '../data/i18n';
 import { COURT_ORDER, CourtId } from '../lib/court-classify';
-import { fmtDate, daysUntil, splitParties, partyKey } from '../lib/clerk-extract';
+import { fmtDate, daysUntil, splitParties, partyKey, type CaseEvent, type CaseMeta } from '../lib/clerk-extract';
+import { bailDraftSrc, shareSummary, varsFromMeta } from '../lib/clerk-draft';
+import { parseBlocks } from '../lib/templates';
+import { appendBlocks } from '../lib/editor-ops';
 import {
   FileKind, kindOf, pdfToDocx, pdfToHtml, pdfToPngZip, pdfToTxt, docxToHtmlString, docxToTxt,
   ocrImage, readFileSmart, ReadResult, targetsFor, Target, TARGET_LABEL, txtToDocx,
@@ -43,7 +46,7 @@ interface LedgerItem {
   name: string; court: CourtId; at: number; ocr: boolean;
   caseNo?: string; firNo?: string; psName?: string; sections?: string[];
   title?: string; nextDate?: string; decidedDate?: string; docType?: string; advocate?: string;
-  note?: string;
+  note?: string; events?: CaseEvent[];
 }
 const LKEY = 'writerpro.clerk.ledger.v2';
 function loadLedger(): LedgerItem[] {
@@ -109,13 +112,13 @@ async function registerDocxBlob(items: LedgerItem[], title: string): Promise<Blo
 }
 
 export default function ClerkPane({ toast, editor }: { toast: (m: string) => void; editor: Editor | null }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [entries, setEntries] = useState<ClerkEntry[]>([]);
   const [ledger, setLedger] = useState<LedgerItem[]>(loadLedger);
   const [busy, setBusy] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState('');
   const [query, setQuery] = useState('');
-  const [view, setView] = useState<'courts' | 'parties'>('courts');
+  const [view, setView] = useState<'courts' | 'parties' | 'timeline'>('courts');
   const [job, setJob] = useState<PrintJob | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
@@ -155,6 +158,7 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
           name: e.name, court: res.cls.court, at: Date.now(), ocr: res.ocr,
           caseNo: m.caseNo, firNo: m.firNo, psName: m.psName, sections: m.sections.length ? m.sections : undefined,
           title: m.title, nextDate: m.nextDate, decidedDate: m.decidedDate, docType: m.docType, advocate: m.advocate,
+          events: m.events.length ? m.events : undefined,
           note: old.find((l) => l.name === e.name)?.note, // keep earlier note on re-scan
         }, ...old.filter((l) => l.name !== e.name)]);
       } catch {
@@ -263,6 +267,66 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 40);
   }, [ledger, q]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* ---------- timeline: group the register into cases ---------- */
+  const caseGroups = useMemo(() => {
+    const map = new Map<string, LedgerItem[]>();
+    for (const l of ledger) {
+      if (!matchesLedger(l)) continue;
+      const norm = (x?: string) => (x || '').replace(/\s+/g, '');
+      const key = l.caseNo ? `${l.court}|C|${norm(l.caseNo)}`
+        : l.firNo ? `${l.court}|F|${norm(l.firNo)}`
+        : `${l.court}|N|${l.name}`;
+      const arr = map.get(key) || [];
+      arr.push(l);
+      map.set(key, arr);
+    }
+    return [...map.entries()].map(([key, items]) => ({ key, court: items[0].court, items }))
+      .sort((a, b) => {
+        const an = Math.min(...a.items.map((i) => (i.nextDate ? daysUntil(i.nextDate) : 1e6)));
+        const bn = Math.min(...b.items.map((i) => (i.nextDate ? daysUntil(i.nextDate) : 1e6)));
+        return an - bn;
+      });
+  }, [ledger, q]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const mergedMeta = (items: LedgerItem[]): CaseMeta => {
+    const pick = (f: (l: LedgerItem) => string | undefined) => items.map(f).find(Boolean);
+    const sections = [...new Set(items.flatMap((l) => l.sections || []))];
+    const evMap = new Map<string, CaseEvent>();
+    for (const l of items) for (const e of l.events || []) if (!evMap.has(e.iso + e.key)) evMap.set(e.iso + e.key, e);
+    const nextDate = pick((l) => l.nextDate);
+    if (nextDate && ![...evMap.values()].some((e) => e.iso === nextDate && e.key === 'next')) evMap.set(nextDate + 'next', { iso: nextDate, key: 'next' });
+    const decided = pick((l) => l.decidedDate);
+    if (decided && ![...evMap.values()].some((e) => e.iso === decided && e.key === 'decided')) evMap.set(decided + 'decided', { iso: decided, key: 'decided' });
+    return {
+      caseNo: pick((l) => l.caseNo), firNo: pick((l) => l.firNo), psName: pick((l) => l.psName),
+      sections, title: pick((l) => l.title), nextDate, decidedDate: decided,
+      docType: pick((l) => l.docType), advocate: pick((l) => l.advocate),
+      dates: [...evMap.values()].map((e) => e.iso).sort(),
+      events: [...evMap.values()].sort((a, b) => a.iso.localeCompare(b.iso)),
+    };
+  };
+
+  const draftBail = (items: LedgerItem[], court: CourtId) => {
+    if (!editor) { toast('—'); return; }
+    const meta = mergedMeta(items);
+    const src = bailDraftSrc(meta, court, lang);
+    appendBlocks(editor, parseBlocks(src), varsFromMeta(meta));
+    toast(t('clerkDrafted'));
+  };
+
+  const shareCase = async (items: LedgerItem[], court: CourtId) => {
+    const meta = mergedMeta(items);
+    const text = shareSummary({
+      court: COURT_SHORT(court), title: meta.title, caseNo: meta.caseNo, firNo: meta.firNo,
+      psName: meta.psName, sections: meta.sections, nextDate: meta.nextDate, decidedDate: meta.decidedDate,
+      docType: meta.docType, files: items.map((l) => l.name), note: items.map((l) => l.note).find(Boolean),
+    });
+    try {
+      if (navigator.share) { await navigator.share({ text }); toast('📤 ✓'); return; }
+    } catch { /* cancelled or unsupported — fall back to clipboard */ }
+    try { await navigator.clipboard.writeText(text); toast(t('clerkCopiedWA')); } catch { toast('—'); }
+  };
+
   const working = entries.filter((e) => e.status !== 'ok');
 
   const doPrint = () => {
@@ -358,6 +422,7 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
       <div className="clerk-switch">
         <button className={view === 'courts' ? 'on' : ''} onClick={() => setView('courts')}>🏛 {t('clerkViewCourts')}</button>
         <button className={view === 'parties' ? 'on' : ''} onClick={() => setView('parties')}>👥 {t('clerkViewParties')}</button>
+        <button className={view === 'timeline' ? 'on' : ''} onClick={() => setView('timeline')}>🕒 {t('clerkViewTimeline')}</button>
       </div>
 
       {ledger.length > 0 && (
@@ -434,6 +499,39 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
             {items.slice(0, 12).map((l, i) => <LedgerRow key={i} l={l} onCopy={copy} onNote={() => editNote(l.name)} showCourt />)}
           </div>
         )) : <p className="muted small" style={{ marginTop: 10 }}>{t('clerkNoParties')}</p>
+      )}
+
+      {view === 'timeline' && (
+        caseGroups.length ? caseGroups.map((g) => {
+          const meta = mergedMeta(g.items);
+          return (
+            <div className="tl-card" key={g.key}>
+              <div className="tl-head">
+                <span className={`badge court-mini`}>{COURT_SHORT(g.court)}</span>
+                <b className="tl-title">{meta.title || meta.caseNo || g.items[0].name}</b>
+              </div>
+              <div className="row tl-actions" style={{ gap: 4 }}>
+                <button className="btn tiny accent" onClick={() => draftBail(g.items, g.court)}>✍ {t('clerkDraftBail')}</button>
+                <button className="btn tiny" onClick={() => void shareCase(g.items, g.court)}>📤 {t('clerkShare')}</button>
+                {meta.caseNo && <span className="muted small" onClick={() => copy(meta.caseNo)}>🗂 {meta.caseNo}</span>}
+                {meta.firNo && <span className="muted small" onClick={() => copy(meta.firNo)}>🚔 {meta.firNo}</span>}
+              </div>
+              <div className="tl-list">
+                {meta.events.length ? meta.events.map((e, i) => {
+                  const d = daysUntil(e.iso);
+                  return (
+                    <div className={`tl-row ${e.key}`} key={i}>
+                      <span className="tl-dot" />
+                      <span className="tl-date">{fmtDate(e.iso)}{e.key === 'next' && d >= 0 && d <= 7 ? ` · ${d === 0 ? t('clerkToday') : `${d}d`}` : ''}</span>
+                      <span className="tl-label">{t(`ev_${e.key}`)}</span>
+                    </div>
+                  );
+                }) : <div className="muted small">{t('clerkNoDates')}</div>}
+              </div>
+              <div className="muted small tl-files">🗃 {g.items.map((l) => l.name).join(' · ')}</div>
+            </div>
+          );
+        }) : <p className="muted small" style={{ marginTop: 10 }}>{t('clerkNoTimeline')}</p>
       )}
 
       {working.length > 0 && (

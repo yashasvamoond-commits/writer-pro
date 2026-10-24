@@ -40,6 +40,12 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Fix (v10.3 — alignment on selected text only)
+
+- **Selection bubble bar**: selecting any text now floats a dark pill right at the selection with **B · I · U** and the four dedicated alignment buttons **⬅ left · ☰ centre · ➡ right · ⇔ justify** — they act on the selected paragraph(s) ONLY, never the whole document, and highlight the alignment currently active.
+- Toolbar alignment buttons now show active state (gold) so you can see the current paragraph alignment at a glance.
+- The page no longer slides sideways while dragging a text selection (`overscroll-behavior-x: contain`).
+
 ## Fix (v10.1 — single-language template insertion)
 
 - Templates, court headers, cause titles, verification/affidavit blocks and clerk-generated drafts are authored bilingual internally; **insertion now keeps ONLY the lines of the active software language** (EN switch → English lines only; हिं switch → Hindi lines only). Language-neutral lines (numbers, `{{variable}}` chips, symbols) survive in both. Regression tests walk all 22 skeletons + all 5 court headers asserting zero leakage either way.

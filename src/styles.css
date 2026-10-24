@@ -665,3 +665,23 @@ table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 6px; 
 /* ============ v10.2 · undo/redo everywhere ============ */
 .tbtn:disabled, .tb-head button:disabled { opacity: 0.35; cursor: default; }
 .tb-head button { min-width: 24px; }
+
+/* ============ v10.3 · selection bubble bar (alignment on selected text only) ============ */
+.bubble-bar {
+  display: flex; align-items: center; gap: 2px; padding: 4px;
+  background: rgba(28, 34, 48, 0.96); border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.4); backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+.bubble-bar button {
+  min-width: 40px; height: 40px; border: 0; border-radius: 9px; cursor: pointer;
+  background: transparent; color: #f2efe6; font-size: 16px; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.bubble-bar button:hover { background: rgba(255,255,255,.14); }
+.bubble-bar button.on { background: #b8860b; color: #fff; }
+.bubble-bar .bsep { width: 1px; height: 26px; background: rgba(255,255,255,.25); margin: 0 4px; }
+@media print { .bubble-bar { display: none !important; } }
+
+/* stop the page sliding sideways while dragging a text selection */
+.desk { overscroll-behavior-x: contain; }

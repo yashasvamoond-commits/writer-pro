@@ -227,6 +227,35 @@ select.tbtn { padding: 5px 4px; border-color: var(--line); background: #fff; }
 }
 .var-chip.empty { background: #fdeaea; border-color: #e7aaaa; color: #8c1d1d; }
 .misspell { text-decoration: underline wavy var(--danger) 1px; text-underline-offset: 3px; }
+.grammar-hit { text-decoration: underline wavy #1d6fb8 1.2px; text-underline-offset: 3px; }
+.fn-ref { color: var(--accent-2); font-size: .72em; vertical-align: super; font-weight: 700; }
+.ProseMirror table { border-collapse: collapse; width: 100%; margin: 6px 0; }
+.ProseMirror td, .ProseMirror th { border: 1px solid #9aa5a3; padding: 4px 7px; min-width: 60px; vertical-align: top; }
+.ProseMirror th { background: var(--accent-soft); font-weight: 700; }
+.ProseMirror img { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+.ProseMirror a { color: var(--accent-2); }
+
+/* status bar */
+.statusbar {
+  flex: 0 0 auto; display: flex; gap: 14px; align-items: center;
+  background: var(--chrome); border-top: 1px solid var(--line);
+  padding: 4px 12px; font-size: 11.5px; color: var(--muted);
+}
+.statusbar .dot { width: 7px; height: 7px; border-radius: 50%; background: #2e9e5b; }
+.statusbar .right { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.lang-switch {
+  display: inline-flex; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; overflow: hidden;
+}
+.lang-switch button { border: 0; background: transparent; color: #dfeef0; padding: 4px 12px; font-size: 12px; }
+.lang-switch button.on { background: #fff; color: var(--accent); font-weight: 700; }
+
+/* header/footer strips (screen preview + repeated on every printed page) */
+.sheet-head, .sheet-foot {
+  position: absolute; left: var(--ml); right: var(--mr);
+  font-size: calc(var(--fs-px) * .8); color: var(--muted); white-space: pre-wrap;
+}
+.sheet-head { top: calc(var(--mt) * .45); }
+.sheet-foot { bottom: calc(var(--mb) * .45); }
 
 /* autocomplete popup */
 .ac-popup {
@@ -290,6 +319,11 @@ table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 6px; 
   .topbar, .toolbar, .sidebar, .bsheet, .modal-back, .ac-popup, .toast, .stitch-note, .edge-handle, .menu-back { display: none !important; }
   .body, .desk { display: block; overflow: visible; padding: 0; height: auto; background: #fff; }
   .sheet { width: auto; min-height: 0; margin: 0; padding: 0; box-shadow: none; border: 0; }
+  .sheet-head, .sheet-foot { position: fixed; left: 0; right: 0; color: #333; }
+  .sheet-head { top: 0; }
+  .sheet-foot { bottom: 0; }
+  .ProseMirror table, .ProseMirror td, .ProseMirror th { border-color: #000; }
+  .statusbar { display: none !important; }
   .sheet.guides::before, .sheet.guides::after { display: none; }
   .ProseMirror { min-height: 0; font-size: var(--fs-pt); }
   .ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror li { line-height: normal; }

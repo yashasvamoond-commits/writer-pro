@@ -87,3 +87,55 @@ export function docStats(editor: Editor): { words: number; paras: number } {
 }
 
 export { parseBlocks };
+
+/* ---------------- court headers, footnotes, find/replace ---------------- */
+import type { Jurisdiction } from './templates';
+
+/** Court header always goes RIGHT-ALIGNED at the very top of the document. */
+export function insertCourtHeader(editor: Editor, j: Jurisdiction, lang: 'en' | 'hi', vars: Record<string, string>) {
+  const blocks = parseBlocks(lang === 'hi' ? j.hi : j.en);
+  editor.chain().insertContentAt(0, blocksToContent(blocks, vars)).run();
+}
+
+export function collectFootnotes(editor: Editor): { n: number; text: string }[] {
+  const out: { n: number; text: string }[] = [];
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === 'fnRef') out.push({ n: node.attrs.n, text: node.attrs.text });
+  });
+  return out.sort((a, b) => a.n - b.n);
+}
+
+export function nextFootnoteNumber(editor: Editor): number {
+  return collectFootnotes(editor).length + 1;
+}
+
+export function insertNotesList(editor: Editor) {
+  const notes = collectFootnotes(editor);
+  if (!notes.length) return false;
+  const blocks = [
+    { type: 'heading' as const, level: 2 as const, align: 'left' as const, plev: 0 as const, bold: true, lang: 'en' as const, text: 'NOTES & REFERENCES / नोट्स व संदर्भ' },
+    ...notes.map((n) => ({ type: 'paragraph' as const, align: 'left' as const, plev: 0 as const, bold: false, lang: 'en' as const, text: `${n.n}. ${n.text}` })),
+  ];
+  editor.chain().focus('end').insertContent(blocksToContent(blocks)).run();
+  return true;
+}
+
+export function findRanges(editor: Editor, query: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  if (!query) return out;
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return;
+    let i = node.text.toLowerCase().indexOf(query.toLowerCase());
+    while (i !== -1) {
+      out.push({ from: pos + i, to: pos + i + query.length });
+      i = node.text.toLowerCase().indexOf(query.toLowerCase(), i + query.length);
+    }
+  });
+  return out;
+}
+
+export function replaceAll(editor: Editor, query: string, replacement: string): number {
+  const ranges = findRanges(editor, query).reverse();
+  for (const r of ranges) editor.commands.insertContentAt({ from: r.from, to: r.to }, replacement);
+  return ranges.length;
+}

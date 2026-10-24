@@ -12,7 +12,10 @@ describe('app smoke', () => {
     expect(screen.getByText(/Insert/)).toBeTruthy();
     // sidebar with close button + font tab
     expect(document.querySelector('.sidebar .side-head .close')).toBeTruthy();
-    expect(screen.getByText('Fonts')).toBeTruthy();
+    expect(screen.getByText(/Fonts/)).toBeTruthy();
+    expect(screen.getByText(/Issues/)).toBeTruthy();
+    // language switch present
+    expect(screen.getByText('हिं')).toBeTruthy();
     // editor surface + court sheet
     expect(document.querySelector('.ProseMirror')).toBeTruthy();
     expect(document.querySelector('.sheet.guides')).toBeTruthy();

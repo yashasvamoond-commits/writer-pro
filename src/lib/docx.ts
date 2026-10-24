@@ -1,5 +1,6 @@
 import {
-  AlignmentType, BorderStyle, Document, HeadingLevel, LineRuleType, Packer, Paragraph, TextRun,
+  AlignmentType, BorderStyle, Document, ExternalHyperlink, Footer, FootnoteReferenceRun,
+  Header, HeadingLevel, ImageRun, LineRuleType, Packer, Paragraph, Table, TableCell, TableRow, TextRun,
 } from 'docx';
 import type { JSONContent } from '@tiptap/core';
 import { DocRecord } from '../types';
@@ -20,37 +21,63 @@ function enFont(doc: DocRecord): string {
   return FONT_BY_ID[doc.settings.fontEn]?.docx ?? 'Times New Roman';
 }
 
-function runsOf(node: JSONContent, doc: DocRecord, prefix = ''): TextRun[] {
-  const s = doc.settings;
-  const base = {
+function dataUrlToBytes(src: string): { bytes: Uint8Array; type: 'png' | 'jpg' | 'gif' | 'bmp' } | null {
+  const m = src.match(/^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/);
+  if (!m) return null;
+  const bin = atob(m[2]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const t = m[1] === 'png' ? 'png' : m[1] === 'gif' ? 'gif' : m[1] === 'bmp' ? 'bmp' : 'jpg';
+  return { bytes, type: t };
+}
+
+interface Ctx {
+  doc: DocRecord;
+  footnotes: Record<string, { children: Paragraph[] }>;
+}
+
+function baseRun(ctx: Ctx) {
+  const s = ctx.doc.settings;
+  return {
     size: s.fontSizePt * 2,
-    font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) },
+    font: { ascii: enFont(ctx.doc), hAnsi: enFont(ctx.doc), cs: csFont(ctx.doc), eastAsia: csFont(ctx.doc) },
   };
-  const runs: TextRun[] = [];
+}
+
+function runsOf(node: JSONContent, ctx: Ctx, prefix = ''): (TextRun | ExternalHyperlink | FootnoteReferenceRun | ImageRun)[] {
+  const base = baseRun(ctx);
+  const runs: (TextRun | ExternalHyperlink | FootnoteReferenceRun | ImageRun)[] = [];
   if (prefix) runs.push(new TextRun({ text: prefix, bold: true, ...base }));
   for (const child of node.content || []) {
     if (child.type === 'text') {
-      runs.push(
-        new TextRun({
-          text: child.text || '',
-          bold: child.marks?.some((m) => m.type === 'bold'),
-          italics: child.marks?.some((m) => m.type === 'italic'),
-          underline: child.marks?.some((m) => m.type === 'underline') ? {} : undefined,
-          ...base,
-        }),
-      );
+      const href = child.marks?.find((mk) => mk.type === 'link')?.attrs?.href as string | undefined;
+      const run = new TextRun({
+        text: child.text || '',
+        bold: child.marks?.some((mk) => mk.type === 'bold'),
+        italics: child.marks?.some((mk) => mk.type === 'italic'),
+        underline: child.marks?.some((mk) => mk.type === 'underline') ? {} : undefined,
+        ...base,
+      });
+      runs.push(href ? new ExternalHyperlink({ children: [run], link: href }) : run);
     } else if (child.type === 'varChip') {
       runs.push(new TextRun({ text: child.attrs?.text || `{{${child.attrs?.key}}}`, ...base }));
     } else if (child.type === 'hardBreak') {
       runs.push(new TextRun({ break: 1, ...base }));
+    } else if (child.type === 'fnRef') {
+      const n = Number(child.attrs?.n || 1);
+      ctx.footnotes[n] = { children: [new Paragraph({ children: [new TextRun({ text: child.attrs?.text || '', ...base })] })] };
+      runs.push(new FootnoteReferenceRun(n));
+    } else if (child.type === 'image') {
+      const img = dataUrlToBytes(String(child.attrs?.src || ''));
+      if (img) runs.push(new ImageRun({ data: img.bytes as unknown as Buffer, type: img.type, transformation: { width: 420, height: 300 } }));
     }
   }
   if (!runs.length) runs.push(new TextRun({ text: '', ...base }));
   return runs;
 }
 
-function blockToParagraphs(node: JSONContent, doc: DocRecord, prefix: string): Paragraph[] {
-  const s = doc.settings;
+function blockToParagraphs(node: JSONContent, ctx: Ctx, prefix: string): (Paragraph | Table)[] {
+  const s = ctx.doc.settings;
   const spacing = { line: Math.round(s.lineHeight * 240), lineRule: LineRuleType.AUTO };
   const align = ALIGN[(node.attrs?.textAlign as string) || 'left'] || AlignmentType.LEFT;
   const common = { spacing, alignment: align };
@@ -61,32 +88,36 @@ function blockToParagraphs(node: JSONContent, doc: DocRecord, prefix: string): P
         new Paragraph({
           ...common,
           heading: lvl === 1 ? HeadingLevel.HEADING_1 : lvl === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_3,
-          children: runsOf(node, doc, prefix),
+          children: runsOf(node, ctx, prefix) as TextRun[],
         }),
       ];
     }
     case 'horizontalRule':
-      return [
-        new Paragraph({
-          spacing,
-          border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 1 } },
-          children: [],
+      return [new Paragraph({ spacing, border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 1 } }, children: [] })];
+    case 'table': {
+      const rows = (node.content || []).map((row) =>
+        new TableRow({
+          children: (row.content || []).map(
+            (cell) =>
+              new TableCell({
+                children: (cell.content || []).map(
+                  (p) => new Paragraph({ spacing, children: runsOf(p, ctx) as TextRun[] }),
+                ),
+              }),
+          ),
         }),
-      ];
-    case 'bulletList':
-      return (node.content || []).flatMap((li, i) =>
-        (li.content || []).map((p) => new Paragraph({ ...common, children: runsOf(p, doc, `${i + 1}. `) })),
       );
+      return [new Table({ rows, width: { size: 100, type: 'pct' as never } })];
+    }
+    case 'bulletList':
     case 'orderedList':
       return (node.content || []).flatMap((li, i) =>
-        (li.content || []).map((p) => new Paragraph({ ...common, children: runsOf(p, doc, `${i + 1}. `) })),
+        (li.content || []).map((p) => new Paragraph({ ...common, children: runsOf(p, ctx, `${i + 1}. `) as TextRun[] })),
       );
     case 'blockquote':
-      return (node.content || []).map(
-        (p) => new Paragraph({ ...common, indent: { left: 720 }, children: runsOf(p, doc) }),
-      );
+      return (node.content || []).map((p) => new Paragraph({ ...common, indent: { left: 720 }, children: runsOf(p, ctx) as TextRun[] }));
     default:
-      return [new Paragraph({ ...common, children: runsOf(node, doc, prefix) })];
+      return [new Paragraph({ ...common, children: runsOf(node, ctx, prefix) as TextRun[] })];
   }
 }
 
@@ -94,29 +125,44 @@ function blockToParagraphs(node: JSONContent, doc: DocRecord, prefix: string): P
 export async function exportDocx(doc: DocRecord, json: JSONContent): Promise<Blob> {
   const s = doc.settings;
   const prefixes = numberingPrefixes(json);
-  const children: Paragraph[] = [];
+  const ctx: Ctx = { doc, footnotes: {} };
+  const children: (Paragraph | Table)[] = [];
   (json.content || []).forEach((node, i) => {
-    children.push(...blockToParagraphs(node, doc, prefixes[i] || ''));
+    children.push(...blockToParagraphs(node, ctx, prefixes[i] || ''));
   });
-  const size =
-    s.pageSize === 'A4' ? { width: 11906, height: 16838 } : { width: 12240, height: 20160 };
+  const size = s.pageSize === 'A4' ? { width: 11906, height: 16838 } : { width: 12240, height: 20160 };
   const margin = {
     top: Math.round(s.marginT * 1440),
     right: Math.round(s.marginR * 1440),
     bottom: Math.round(s.marginB * 1440),
     left: Math.round(s.marginL * 1440),
   };
+  const runFont = { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) };
   const document = new Document({
     creator: 'Writer Pro Legal Drafter',
     title: doc.title,
     description: 'Court-ready pleading exported offline from Writer Pro',
-    sections: [{ properties: { page: { size, margin } }, children }],
+    footnotes: ctx.footnotes,
+    sections: [
+      {
+        properties: {
+          page: { size, margin },
+        },
+        headers: s.headerText
+          ? { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: s.headerText, size: s.fontSizePt * 2 - 4, font: runFont })] })] }) }
+          : undefined,
+        footers: s.footerText
+          ? { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.footerText, size: s.fontSizePt * 2 - 4, font: runFont })] })] }) }
+          : undefined,
+        children,
+      },
+    ],
     styles: {
       default: {
-        document: { run: { size: s.fontSizePt * 2, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading1: { run: { size: (s.fontSizePt + 2) * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading2: { run: { size: (s.fontSizePt + 1) * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
-        heading3: { run: { size: s.fontSizePt * 2, bold: true, font: { ascii: enFont(doc), hAnsi: enFont(doc), cs: csFont(doc), eastAsia: csFont(doc) } } },
+        document: { run: { size: s.fontSizePt * 2, font: runFont } },
+        heading1: { run: { size: (s.fontSizePt + 2) * 2, bold: true, font: runFont } },
+        heading2: { run: { size: (s.fontSizePt + 1) * 2, bold: true, font: runFont } },
+        heading3: { run: { size: s.fontSizePt * 2, bold: true, font: runFont } },
       },
     },
   });

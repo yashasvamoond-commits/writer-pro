@@ -1,11 +1,14 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { PageSettings } from '../types';
-import { currentPlev, setPlev, toggleLang, convertScope } from '../lib/editor-ops';
+import { currentPlev, setPlev, toggleLang, convertScope, insertCourtHeader, insertNotesList } from '../lib/editor-ops';
+import { JURISDICTIONS } from '../lib/templates';
+import { useI18n } from '../data/i18n';
 
 interface Props {
   editor: Editor | null;
   settings: PageSettings;
+  vars: Record<string, string>;
   patch: (p: Partial<PageSettings>) => void;
   onDocs: () => void;
   onExport: () => void;
@@ -13,10 +16,14 @@ interface Props {
   onSidebar: (tab: string) => void;
   sidebarOpen: boolean;
   onPrint: () => void;
+  onHF: () => void;
+  onFR: () => void;
+  onFN: () => void;
+  onLink: () => void;
+  onOcr: () => void;
   toast: (m: string) => void;
 }
 
-/** Compact dropdown used by the grouped toolbar. */
 function Menu({ label, title, right, children }: { label: ReactNode; title: string; right?: boolean; children: (close: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -35,37 +42,45 @@ function Menu({ label, title, right, children }: { label: ReactNode; title: stri
 }
 
 export default function Toolbar(p: Props) {
+  const { t, lang } = useI18n();
+  const imgRef = useRef<HTMLInputElement>(null);
   const { editor, settings, patch } = p;
   if (!editor) return null;
   const plev = currentPlev(editor);
-  const lang = editor.getAttributes('paragraph')?.lang || 'en';
+  const paraLang = editor.getAttributes('paragraph')?.lang || 'en';
 
   const conv = (scope: 'selection' | 'doc') => {
     const dir = convertScope(editor, scope);
-    p.toast(
-      dir === 'toUnicode' ? 'Kruti Dev → Unicode ✓'
-        : dir === 'toKruti' ? 'Unicode → Kruti Dev 010 ✓'
-          : 'Pehle text select karein / select text first',
-    );
+    p.toast(dir === 'toUnicode' ? t('tConvertedU') : dir === 'toKruti' ? t('tConvertedK') : t('tSelectFirst'));
+  };
+
+  const pickImage = async (f: File) => {
+    if (f.size > 2_500_000) { p.toast('Image too large (max 2.5 MB) / चित्र बहुत बड़ा'); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      editor.chain().focus().setImage({ src: String(reader.result) }).run();
+      p.toast(t('tInserted'));
+    };
+    reader.readAsDataURL(f);
   };
 
   return (
     <div className="toolbar">
-      <button className={`tbtn ${p.sidebarOpen ? 'on' : ''}`} onClick={() => p.onSidebar('')} title="Panels show/hide karein — टूल पैनल">☰</button>
+      <button className={`tbtn ${p.sidebarOpen ? 'on' : ''}`} onClick={() => p.onSidebar('')} title={t('panels')}>☰</button>
 
-      <Menu label="📁 File" title="Drafts, export, print">
+      <Menu label={`📁 ${t('file')}`} title={t('file')}>
         {(close) => (
           <>
-            <button onClick={() => { p.onDocs(); close(); }}>📁 Drafts open / new <span className="hint">फाइलें</span></button>
-            <button onClick={() => { p.onExport(); close(); }}>⬇ Export DOCX / PDF / backup</button>
-            <button onClick={() => { p.onPrint(); close(); }}>🖨 Print / Save as PDF <span className="hint">कोर्ट कॉपी</span></button>
+            <button onClick={() => { p.onDocs(); close(); }}>📁 {t('drafts')}</button>
+            <button onClick={() => { p.onExport(); close(); }}>⬇ {t('exportMenu')}</button>
+            <button onClick={() => { p.onPrint(); close(); }}>🖨 {t('print')}</button>
           </>
         )}
       </Menu>
       <span className="sep" />
 
-      <button className="tbtn" onClick={() => editor.chain().focus().undo().run()} title="Undo">↩</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().redo().run()} title="Redo">↪</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().undo().run()} title={t('undo')}>↩</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().redo().run()} title={t('redo')}>↪</button>
       <span className="sep" />
 
       <button className="tbtn" onClick={() => editor.chain().focus().toggleBold().run()} title="Bold"><b>B</b></button>
@@ -73,72 +88,105 @@ export default function Toolbar(p: Props) {
       <button className="tbtn" onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline"><u>U</u></button>
       <span className="sep" />
 
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Left align">⬅</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Center (cause titles)">☰</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Right (signature)">➡</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify">⇔</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('left').run()} title={t('alignL')}>⬅</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('center').run()} title={t('alignC')}>☰</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('right').run()} title={t('alignR')}>➡</button>
+      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('justify').run()} title={t('alignJ')}>⇔</button>
       <span className="sep" />
 
-      <button className={`tbtn ${plev === 1 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 1 ? 0 : 1)} title="Paragraph 1. 2. 3.">1.</button>
-      <button className={`tbtn ${plev === 2 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 2 ? 0 : 2)} title="Sub (a) (b)">(a)</button>
-      <button className={`tbtn ${plev === 3 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 3 ? 0 : 3)} title="Sub (i) (ii)">(i)</button>
+      <button className={`tbtn ${plev === 1 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 1 ? 0 : 1)} title={t('plev1')}>1.</button>
+      <button className={`tbtn ${plev === 2 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 2 ? 0 : 2)} title={t('plev2')}>(a)</button>
+      <button className={`tbtn ${plev === 3 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 3 ? 0 : 3)} title={t('plev3')}>(i)</button>
       <span className="sep" />
 
-      <button className={`tbtn ${lang === 'hi' ? 'on' : ''}`} onClick={() => toggleLang(editor)} title="Hindi / English paragraph toggle">
-        {lang === 'hi' ? 'अ' : 'A'}
+      <button className={`tbtn ${paraLang === 'hi' ? 'on' : ''}`} onClick={() => toggleLang(editor)} title={t('langPara')}>
+        {paraLang === 'hi' ? 'अ' : 'A'}
       </button>
 
-      <Menu label="क⇄U" title="Kruti Dev ⇄ Unicode conversion">
+      <Menu label="क⇄U" title={t('convert')}>
         {(close) => (
           <>
-            <button onClick={() => { conv('selection'); close(); }}>Convert selected text <span className="hint">चयनित</span></button>
-            <button onClick={() => { conv('doc'); close(); }}>Convert whole document <span className="hint">पूरा ड्राफ्ट</span></button>
+            <button onClick={() => { conv('selection'); close(); }}>{t('convSel')}</button>
+            <button onClick={() => { conv('doc'); close(); }}>{t('convDoc')}</button>
           </>
         )}
       </Menu>
       <span className="sep" />
 
-      <select className="tbtn" value={settings.fontSizePt} onChange={(e) => patch({ fontSizePt: Number(e.target.value) })} title="Font size — court standard 14pt">
+      <select className="tbtn" value={settings.fontSizePt} onChange={(e) => patch({ fontSizePt: Number(e.target.value) })} title={t('fontSize')}>
         {[12, 13, 14, 15, 16].map((n) => <option key={n} value={n}>{n} pt</option>)}
       </select>
-      <select className="tbtn" value={settings.lineHeight} onChange={(e) => patch({ lineHeight: Number(e.target.value) as 1.5 | 2 })} title="Line spacing">
+      <select className="tbtn" value={settings.lineHeight} onChange={(e) => patch({ lineHeight: Number(e.target.value) as 1.5 | 2 })} title={t('lineSp')}>
         <option value={1.5}>1.5</option>
         <option value={2}>2.0</option>
       </select>
 
-      <Menu label="👁 View" title="Page, margins, guides, fonts">
+      <Menu label={`👁 ${t('view')}`} title={t('view')}>
         {(close) => (
           <>
-            <div className="mtitle">Paper / कागज़</div>
+            <div className="mtitle">{t('paper')}</div>
             <button onClick={() => { patch({ pageSize: 'A4' }); close(); }}>A4 {settings.pageSize === 'A4' ? '✓' : ''}</button>
             <button onClick={() => { patch({ pageSize: 'LEGAL' }); close(); }}>Legal {settings.pageSize === 'LEGAL' ? '✓' : ''}</button>
             <hr />
-            <button onClick={() => { patch({ marginL: 1.75, marginR: 1, marginT: 1, marginB: 1 }); close(); }}>Court margins 1.75″ / 1″ <span className="hint">सिलाई</span></button>
-            <button onClick={() => { patch({ guides: !settings.guides }); close(); }}>Stitching guides {settings.guides ? '✓' : ''}</button>
-            <button onClick={() => { patch({ spellcheck: !settings.spellcheck }); close(); }}>Legal spell-check {settings.spellcheck ? '✓' : ''}</button>
+            <button onClick={() => { patch({ marginL: 1.75, marginR: 1, marginT: 1, marginB: 1 }); close(); }}>{t('courtMargins')}</button>
+            <button onClick={() => { patch({ guides: !settings.guides }); close(); }}>{t('guides')} {settings.guides ? '✓' : ''}</button>
+            <button onClick={() => { patch({ spellcheck: !settings.spellcheck }); close(); }}>{t('spell')} {settings.spellcheck ? '✓' : ''}</button>
+            <button onClick={() => { patch({ grammar: !settings.grammar }); close(); }}>{t('grammar')} {settings.grammar ? '✓' : ''}</button>
             <hr />
-            <button onClick={() => { p.onSidebar('fonts'); close(); }}>🔤 Font library <span className="hint">फ़ॉन्ट</span></button>
+            <button onClick={() => { p.onSidebar('fonts'); close(); }}>🔤 {t('fontLib')}</button>
+            <button onClick={() => { p.onHF(); close(); }}>📄 {t('headerFooter')}</button>
+            <button onClick={() => { p.onFR(); close(); }}>🔍 {t('find')}</button>
           </>
         )}
       </Menu>
 
-      <Menu label="＋ Insert" title="Templates, variables, cases, index">
+      <Menu label={`＋ ${t('insert')}`} title={t('insert')}>
         {(close) => (
           <>
-            <button onClick={() => { p.onSidebar('templates'); close(); }}>🏛 Court templates <span className="hint">प्रपत्र</span></button>
-            <button onClick={() => { p.onSidebar('variables'); close(); }}>🧩 Smart variables</button>
-            <button onClick={() => { p.onSidebar('cases'); close(); }}>⚖ My cases <span className="hint">प्रकरण</span></button>
-            <button onClick={() => { p.onSidebar('index'); close(); }}>🗂 Index / list of dates</button>
-            <button onClick={() => { p.onSidebar('dict'); close(); }}>📖 Legal dictionary</button>
+            <div className="mtitle">{t('courtHeader')}</div>
+            {JURISDICTIONS.map((j) => (
+              <button
+                key={j.id}
+                onClick={() => { insertCourtHeader(editor, j, lang, p.vars); p.toast(t('tHeaderTop')); close(); }}
+              >🏛 {j.label}</button>
+            ))}
             <hr />
-            <button onClick={() => { p.onSheet(); close(); }}>🖋 Verification / Affidavit <span className="hint">सत्यापन</span></button>
+            <button onClick={() => { p.onSidebar('templates'); close(); }}>🏛 {t('templates')}</button>
+            <button onClick={() => { p.onSidebar('variables'); close(); }}>🧩 {t('variables')}</button>
+            <button onClick={() => { p.onSidebar('cases'); close(); }}>⚖ {t('cases')}</button>
+            <button onClick={() => { p.onSidebar('index'); close(); }}>🗂 {t('index')}</button>
+            <button onClick={() => { p.onSidebar('dict'); close(); }}>📖 {t('dict')}</button>
+            <hr />
+            <button onClick={() => { imgRef.current?.click(); close(); }}>🖼 {t('image')}</button>
+            <button onClick={() => { p.onOcr(); close(); }}>📷 {t('ocr')}</button>
+            <button onClick={() => { p.onLink(); close(); }}>🔗 {t('link')}</button>
+            <button onClick={() => { p.onFN(); close(); }}>📝 {t('footnote')}</button>
+            <button onClick={() => { insertNotesList(editor) ? p.toast(t('tInserted')) : p.toast('—'); close(); }}>📚 {t('notesList')}</button>
+            <hr />
+            <button onClick={() => { p.onSheet(); close(); }}>🖋 {t('affidavit')}</button>
+          </>
+        )}
+      </Menu>
+
+      <Menu label={`⊞ ${t('table')}`} title={t('table')}>
+        {(close) => (
+          <>
+            <button onClick={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); close(); }}>⊞ {t('tableNew')}</button>
+            <button onClick={() => { editor.chain().focus().addRowAfter().run(); close(); }}>＋ {t('rowAdd')}</button>
+            <button onClick={() => { editor.chain().focus().addColumnAfter().run(); close(); }}>＋ {t('colAdd')}</button>
+            <button onClick={() => { editor.chain().focus().deleteRow().run(); close(); }}>－ {t('rowDel')}</button>
+            <button onClick={() => { editor.chain().focus().deleteColumn().run(); close(); }}>－ {t('colDel')}</button>
           </>
         )}
       </Menu>
 
       <span style={{ flex: 1 }} />
-      <button className="tbtn" onClick={p.onPrint} title="Court-ready PDF / paper">🖨</button>
-      <button className="tbtn primary" onClick={p.onExport}>⬇ Export</button>
+      <button className="tbtn" onClick={p.onPrint} title={t('print')}>🖨</button>
+      <button className="tbtn primary" onClick={p.onExport}>⬇ {t('export')}</button>
+      <input
+        ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void pickImage(f); e.target.value = ''; }}
+      />
     </div>
   );
 }

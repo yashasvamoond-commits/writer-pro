@@ -1,4 +1,5 @@
 import { Extension, Node, mergeAttributes } from '@tiptap/core';
+import { checkGrammar } from '../lib/grammar';
 import Paragraph from '@tiptap/extension-paragraph';
 import Heading from '@tiptap/extension-heading';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -91,7 +92,25 @@ export function isKnownWord(w: string): boolean {
   return false;
 }
 
-export const SpellCheckPlugin = (enabled: () => boolean) =>
+/** Footnote / note reference chip: auto-numbered sup marker. */
+export const FnRef = Node.create({
+  name: 'fnRef',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  addAttributes() {
+    return { n: { default: 1 }, text: { default: '' } };
+  },
+  parseHTML() {
+    return [{ tag: 'sup[data-fn]' }];
+  },
+  renderHTML({ node }) {
+    const a = node.attrs as { n: number; text: string };
+    return ['sup', mergeAttributes({ 'data-fn': String(a.n), class: 'fn-ref', title: a.text }), `[${a.n}]`];
+  },
+});
+
+export const SpellCheckPlugin = (enabled: () => boolean, grammarOn: () => boolean) =>
   Extension.create({
     name: 'legalSpellCheck',
     addProseMirrorPlugins() {
@@ -111,6 +130,12 @@ export const SpellCheckPlugin = (enabled: () => boolean) =>
                 while ((m = re.exec(node.text))) {
                   if (!isKnownWord(m[0])) {
                     decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, { class: 'misspell' }));
+                  }
+                }
+                if (grammarOn()) {
+                  for (const iss of checkGrammar(node.text)) {
+                    if (iss.kind !== 'grammar') continue;
+                    decos.push(Decoration.inline(pos + iss.from, pos + iss.to, { class: 'grammar-hit' }));
                   }
                 }
               });

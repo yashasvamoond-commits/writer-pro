@@ -32,14 +32,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Android SDK (cmdline-tools + licenses)
-        uses: android-actions/setup-android@v3
+      - name: Locate / prepare Android SDK
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            for cand in /usr/local/lib/android/sdk /opt/android/sdk $HOME/android-sdk; do
+              [ -d "$cand" ] && echo "ANDROID_HOME=$cand" >> $GITHUB_ENV && export ANDROID_HOME=$cand && break
+            done
+          fi
+          if [ ! -d "${ANDROID_HOME:-/nonexistent}" ]; then
+            mkdir -p $HOME/android-sdk/cmdline-tools && cd $HOME/android-sdk/cmdline-tools
+            curl -fsSL -o tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            unzip -q tools.zip && mv cmdline-tools latest
+            echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+            export ANDROID_HOME=$HOME/android-sdk
+          fi
+          echo "ANDROID_HOME=$ANDROID_HOME"
 
       - name: Accept SDK licenses & ensure required components
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0" || true
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
+          SDKM=$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" "platform-tools" "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0" || true
+          ls "$ANDROID_HOME/platforms" || true
+          ls "$ANDROID_HOME/build-tools" || true
 
       - name: Generate native Android project
         run: npx cap add android
@@ -50,6 +66,7 @@ jobs:
       - name: Assemble debug APK
         run: |
           cd android
+          echo "sdk.dir=${ANDROID_HOME:-/usr/local/lib/android/sdk}" > local.properties
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 

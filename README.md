@@ -19,10 +19,10 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 
 | Spec requirement | Where |
 | --- | --- |
-| Hindi/English coexistence, no matra/line-height jitter | `src/editor/Editor.tsx` (per-paragraph `data-lang`, absolute-px line boxes), bundled Mukta (OFL) + Mangal/Aparajita stacks |
+| Hindi/English coexistence, no matra/line-height jitter | `src/editor/Editor.tsx` (per-paragraph `data-lang`, absolute-px line boxes) + offline **font library** (`src/data/fonts.ts`): Mukta, Hind, Noto Sans/Serif Devanagari, Martel, Yantra Manav, Rozha One + Tinos/EB Garamond/Lora, plus Mangal/Aparajita system stacks |
 | Kruti Dev ⇄ Unicode, one-tap, selection or whole doc | `src/lib/krutidev.ts` + `src/data/kruti-pairs.ts` (forward engine: BharatType MIT; inverse engine built here), toolbar `क⇄U` buttons |
 | Auto-detect pasted Kruti Dev + prompt | `detectKrutiDev()` paste interceptor → “Convert Kruti Dev to Unicode?” modal (`src/ui/Overlays.tsx`) |
-| Court font presets (14 pt, 1.5/2.0 spacing, 1.75"/1"/1"/1" margins) | Toolbar presets, `src/types.ts` defaults, `--fs/--lh/--m*` CSS vars |
+| Court font presets (14 pt, 1.5/2.0 spacing, 1.75"/1"/1"/1" margins) | Toolbar presets, `src/types.ts` defaults, `--fs/--lh/--m*` CSS vars; per-document font choice in the Fonts panel, mapped to court-PC names in DOCX |
 | Bilingual legal dictionaries + autocomplete | `src/data/legal-dictionary.ts` (maxims, Hindi/Urdu revenue & procedural terms, BNS/BNSS/BSA/CPC/NI Act/RTA phrasing), autocomplete popup in editor |
 | Spell-check that never flags statutory language | `SpellCheckPlugin` (offline whitelist + code-split EN wordlist), red-squiggle decorations |
 | Jurisdiction blocks (JMIC/ADSJ/SDM Bhadra…) | `JURISDICTIONS` in `src/lib/templates.ts`, Templates panel |
@@ -37,6 +37,7 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Searchable court-ready PDF (A4/Legal, embedded fonts, margins) | Print engine: dynamic `@page` rule + print CSS (`src/lib/print.ts`) — platform renderer shapes Devanagari and embeds fonts |
 | Direct thermal/laser printing (Wi-Fi / USB-OTG) | Android PrintManager via WebView print; see APK-BUILD.md |
 | Completely offline | Service worker (`public/sw.js`), bundled fonts/dicts/tables, localStorage drafts, zero runtime network calls |
+| Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
 ## Notes

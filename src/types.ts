@@ -8,7 +8,8 @@ export interface PageSettings {
   marginR: number;
   marginT: number;
   marginB: number;
-  fontHi: 'mukta' | 'mangal' | 'aparajita';
+  fontHi: string; // FontDef id (Hindi/Devanagari)
+  fontEn: string; // FontDef id (English/Latin)
   guides: boolean;
   spellcheck: boolean;
 }
@@ -22,6 +23,7 @@ export const DEFAULT_SETTINGS: PageSettings = {
   marginT: 1.0,
   marginB: 1.0,
   fontHi: 'mukta',
+  fontEn: 'tinos',
   guides: true,
   spellcheck: true,
 };

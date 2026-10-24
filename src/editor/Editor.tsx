@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap/react';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -173,6 +174,20 @@ export default function EditorPane({ content, settings, placeholder, onReady, on
         </div>
       )}
       <EditorContent editor={editor} />
+      {editor && (
+        <BubbleMenu editor={editor} updateDelay={80} shouldShow={({ state }) => !state.selection.empty}>
+          <div className="bubble-bar">
+            <button className={editor.isActive('bold') ? 'on' : ''} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold"><b>B</b></button>
+            <button className={editor.isActive('italic') ? 'on' : ''} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic"><i>I</i></button>
+            <button className={editor.isActive('underline') ? 'on' : ''} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline"><u>U</u></button>
+            <span className="bsep" />
+            <button className={editor.isActive({ textAlign: 'left' }) ? 'on' : ''} onClick={() => editor.chain().focus().setTextAlign('left').run()} title="Align left / बाएँ">⬅</button>
+            <button className={editor.isActive({ textAlign: 'center' }) ? 'on' : ''} onClick={() => editor.chain().focus().setTextAlign('center').run()} title="Centre / केंद्र">☰</button>
+            <button className={editor.isActive({ textAlign: 'right' }) ? 'on' : ''} onClick={() => editor.chain().focus().setTextAlign('right').run()} title="Align right / दाएँ">➡</button>
+            <button className={editor.isActive({ textAlign: 'justify' }) ? 'on' : ''} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justify both sides / उभयविन्यास">⇔</button>
+          </div>
+        </BubbleMenu>
+      )}
       {ac.open && (
         <div className="ac-popup" style={{ left: ac.x, top: ac.y }}>
           {ac.items.map((it, i) => (

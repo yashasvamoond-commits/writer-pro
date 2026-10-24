@@ -126,10 +126,10 @@ export default function Toolbar(p: Props) {
       <button className="tbtn" onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline"><u>U</u></button>
       <span className="sep" />
 
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('left').run()} title={t('alignL')}>⬅</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('center').run()} title={t('alignC')}>☰</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('right').run()} title={t('alignR')}>➡</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().setTextAlign('justify').run()} title={t('alignJ')}>⇔</button>
+      <button className={`tbtn ${editor.isActive({ textAlign: 'left' }) ? 'on' : ''}`} onClick={() => editor.chain().focus().setTextAlign('left').run()} title={t('alignL')}>⬅</button>
+      <button className={`tbtn ${editor.isActive({ textAlign: 'center' }) ? 'on' : ''}`} onClick={() => editor.chain().focus().setTextAlign('center').run()} title={t('alignC')}>☰</button>
+      <button className={`tbtn ${editor.isActive({ textAlign: 'right' }) ? 'on' : ''}`} onClick={() => editor.chain().focus().setTextAlign('right').run()} title={t('alignR')}>➡</button>
+      <button className={`tbtn ${editor.isActive({ textAlign: 'justify' }) ? 'on' : ''}`} onClick={() => editor.chain().focus().setTextAlign('justify').run()} title={t('alignJ')}>⇔</button>
       <span className="sep" />
 
       <button className={`tbtn ${plev === 1 ? 'on' : ''}`} onClick={() => setPlev(editor, plev === 1 ? 0 : 1)} title={t('plev1')}>1.</button>

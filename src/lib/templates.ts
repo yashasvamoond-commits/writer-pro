@@ -45,43 +45,40 @@ export function parseBlocks(src: string): Block[] {
 /* ------------------------------------------------------------------ */
 /* Jurisdiction blocks                                                 */
 /* ------------------------------------------------------------------ */
-export interface Jurisdiction { id: string; label: string; body: string }
+export interface Jurisdiction { id: string; label: string; en: string; hi: string }
 
+/** The five standard subordinate-court headers (Hindi + English).
+ *  Always inserted RIGHT-ALIGNED at the very top of the document. */
 export const JURISDICTIONS: Jurisdiction[] = [
   {
-    id: 'jmic-bhadra',
-    label: 'JMFC, Bhadra / न्यायिक मजिस्ट्रेट प्रथम श्रेणी, भाद्रा',
-    body:
-      'C:IN THE COURT OF THE JUDICIAL MAGISTRATE FIRST CLASS, BHADRA\n' +
-      'C:न्यायालय न्यायिक मजिस्ट्रेट प्रथम श्रेणी, भाद्रा (हनुमानगढ़)',
+    id: 'jm',
+    label: 'JM Court / न्यायिक मजिस्ट्रेट',
+    en: 'R:IN THE COURT OF THE JUDICIAL MAGISTRATE FIRST CLASS, {{place}}\nR:न्यायालय न्यायिक मजिस्ट्रेट प्रथम श्रेणी, {{place}}',
+    hi: 'R:न्यायालय न्यायिक मजिस्ट्रेट प्रथम श्रेणी, {{place}}\nR:IN THE COURT OF THE JUDICIAL MAGISTRATE FIRST CLASS, {{place}}',
   },
   {
-    id: 'adsj-bhadra',
-    label: 'Additional District & Sessions Judge, Bhadra / अपर जिला एवं सेशन न्यायाधीश',
-    body:
-      'C:IN THE COURT OF THE ADDITIONAL DISTRICT & SESSIONS JUDGE, BHADRA\n' +
-      'C:न्यायालय अपर जिला एवं सेशन न्यायाधीश, भाद्रा (हनुमानगढ़)',
+    id: 'acjm',
+    label: 'ACJM Court / अतिरिक्त मुख्य न्यायिक मजिस्ट्रेट',
+    en: 'R:IN THE COURT OF THE ADDITIONAL CHIEF JUDICIAL MAGISTRATE, {{place}}\nR:न्यायालय अतिरिक्त मुख्य न्यायिक मजिस्ट्रेट, {{place}}',
+    hi: 'R:न्यायालय अतिरिक्त मुख्य न्यायिक मजिस्ट्रेट, {{place}}\nR:IN THE COURT OF THE ADDITIONAL CHIEF JUDICIAL MAGISTRATE, {{place}}',
   },
   {
-    id: 'sdm-bhadra',
-    label: 'Sub-Divisional Magistrate / Revenue Officer / उपखण्ड अधिकारी',
-    body:
-      'C:BEFORE THE SUB-DIVISIONAL MAGISTRATE / REVENUE OFFICER, BHADRA\n' +
-      'C:सेवा में उपखण्ड अधिकारी (सिविल) एवं राजस्व अधिकारी, भाद्रा',
+    id: 'adj',
+    label: 'ADJ Court / अपर जिला एवं सेशन न्यायाधीश',
+    en: 'R:IN THE COURT OF THE ADDITIONAL DISTRICT & SESSIONS JUDGE, {{place}}\nR:न्यायालय अपर जिला एवं सेशन न्यायाधीश, {{place}}',
+    hi: 'R:न्यायालय अपर जिला एवं सेशन न्यायाधीश, {{place}}\nR:IN THE COURT OF THE ADDITIONAL DISTRICT & SESSIONS JUDGE, {{place}}',
   },
   {
-    id: 'civil-judge',
-    label: 'Civil Judge (J.D.), Bhadra / न्यायालय सिविल जज',
-    body:
-      'C:IN THE COURT OF THE CIVIL JUDGE (JUNIOR DIVISION), BHADRA\n' +
-      'C:न्यायालय सिविल जज (कनिष्ठ श्रेणी), भाद्रा',
+    id: 'sdm',
+    label: 'SDM Court / उपखण्ड अधिकारी',
+    en: 'R:BEFORE THE SUB-DIVISIONAL MAGISTRATE / REVENUE OFFICER, {{place}}\nR:सेवा में उपखण्ड अधिकारी (सिविल) एवं राजस्व अधिकारी, {{place}}',
+    hi: 'R:सेवा में उपखण्ड अधिकारी (सिविल) एवं राजस्व अधिकारी, {{place}}\nR:BEFORE THE SUB-DIVISIONAL MAGISTRATE / REVENUE OFFICER, {{place}}',
   },
   {
-    id: 'dsj-hanumangarh',
-    label: 'District & Sessions Judge, Hanumangarh / जिला एवं सेशन न्यायाधीश',
-    body:
-      'C:IN THE COURT OF THE DISTRICT & SESSIONS JUDGE, HANUMANGARH\n' +
-      'C:न्यायालय जिला एवं सेशन न्यायाधीश, हनुमानगढ़',
+    id: 'aecm',
+    label: 'AECM Court / अतिरिक्त कार्यपालक मजिस्ट्रेट',
+    en: 'R:IN THE COURT OF THE ADDITIONAL EXECUTIVE MAGISTRATE, {{place}}\nR:न्यायालय अतिरिक्त कार्यपालक मजिस्ट्रेट, {{place}}',
+    hi: 'R:न्यायालय अतिरिक्त कार्यपालक मजिस्ट्रेट, {{place}}\nR:IN THE COURT OF THE ADDITIONAL EXECUTIVE MAGISTRATE, {{place}}',
   },
 ];
 

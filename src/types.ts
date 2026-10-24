@@ -10,6 +10,10 @@ export interface PageSettings {
   marginB: number;
   fontHi: string; // FontDef id (Hindi/Devanagari)
   fontEn: string; // FontDef id (English/Latin)
+  grammar: boolean;
+  uiLang: 'en' | 'hi'; // dedicated software-language switch (never parallel)
+  headerText: string;
+  footerText: string;
   guides: boolean;
   spellcheck: boolean;
 }
@@ -24,6 +28,10 @@ export const DEFAULT_SETTINGS: PageSettings = {
   marginB: 1.0,
   fontHi: 'mukta',
   fontEn: 'tinos',
+  grammar: true,
+  uiLang: 'en',
+  headerText: '',
+  footerText: '',
   guides: true,
   spellcheck: true,
 };

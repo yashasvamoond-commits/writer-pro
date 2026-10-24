@@ -3,7 +3,13 @@ import { EditorContent, useEditor, type Editor, type JSONContent } from '@tiptap
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
 import Placeholder from '@tiptap/extension-placeholder';
-import { CourtHeading, CourtParagraph, SpellCheckPlugin, VarChip } from './extensions';
+import { Table } from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
+import Image from '@tiptap/extension-image';
+import Link from '@tiptap/extension-link';
+import { CourtHeading, CourtParagraph, FnRef, SpellCheckPlugin, VarChip } from './extensions';
 import { ALL_ENTRIES } from '../data/legal-dictionary';
 import { containsDevanagari, detectKrutiDev } from '../lib/krutidev';
 import { PageSettings } from '../types';
@@ -11,6 +17,7 @@ import { PageSettings } from '../types';
 interface Props {
   content: JSONContent;
   settings: PageSettings;
+  placeholder: string;
   onReady: (e: Editor) => void;
   onUpdate: (json: JSONContent) => void;
   onKrutiPaste: (text: string) => void;
@@ -26,7 +33,7 @@ interface AcState {
   y: number;
 }
 
-export default function EditorPane({ content, settings, onReady, onUpdate, onKrutiPaste }: Props) {
+export default function EditorPane({ content, settings, placeholder, onReady, onUpdate, onKrutiPaste }: Props) {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [ac, setAc] = useState<AcState>({ open: false, items: [], sel: 0, from: 0, to: 0, x: 0, y: 0 });
@@ -41,9 +48,19 @@ export default function EditorPane({ content, settings, onReady, onUpdate, onKru
       CourtParagraph,
       CourtHeading.configure({ levels: [1, 2, 3] }),
       VarChip,
+      FnRef,
       TextAlign.configure({ types: ['paragraph', 'heading'] }),
-      Placeholder.configure({ placeholder: 'यहाँ ड्राफ्ट लिखना आरंभ करें — Start drafting…' }),
-      SpellCheckPlugin(() => settingsRef.current.spellcheck),
+      Placeholder.configure({ placeholder }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Image.configure({ inline: false }),
+      Link.configure({ openOnClick: false, autolink: true }),
+      SpellCheckPlugin(
+        () => settingsRef.current.spellcheck,
+        () => settingsRef.current.grammar,
+      ),
     ],
     editorProps: {
       handlePaste: (_view, event) => {

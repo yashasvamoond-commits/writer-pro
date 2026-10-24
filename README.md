@@ -40,6 +40,25 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v3)
+
+- **Dedicated language switch** (top-bar EN / हिं): the whole software renders
+  fully in ONE language — never a parallel mix.
+- **Five court headers** (JM, ACJM, ADJ, SDM, AECM — Hindi + English) always
+  inserted right-aligned at the very top of the document.
+- **Intensive offline dictionary**: ~1,400 entries (Latin maxims, English legal
+  vocabulary, Hindi/Urdu procedural & revenue terms, statutory citations across
+  BNS/BNSS/BSA/CPC/CrPC/IPC/NI/TP/Registration/Stamp/Limitation/DV/POCSO/NDPS/
+  Rajasthan Tenancy & Land Revenue).
+- **Grammar + citation engine** (`src/lib/grammar.ts`): offline rules with
+  one-tap fixes; legacy IPC/CrPC citations flagged with BNS/BNSS equivalents.
+- **Photo → text OCR** fully offline (bundled hin+eng traineddata, 12 MB) with
+  low-confidence word review in the Issues panel.
+- **Insert toolbox**: tables, photos/art, hyperlinks, footnotes & note
+  references (real DOCX footnotes), repeating header & footer on every printed
+  page, find & replace.
+- **Status bar**: autosave state, word/para counts, paper & language.
+
 ## Notes
 
 - Section citations in templates follow BNSS/BNS/BSA 2023 with legacy CrPC/IPC

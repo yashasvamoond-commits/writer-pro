@@ -213,7 +213,7 @@ select.tbtn { padding: 5px 4px; border-color: var(--line); background: #fff; }
   min-height: calc(var(--page-h) - var(--mt) - var(--mb)); caret-color: var(--accent);
 }
 .ProseMirror p, .ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror li {
-  line-height: var(--lh); margin: 0 0 2px 0;
+  line-height: var(--lh); margin: var(--sp-before, 0px) 0 var(--sp-after, 2px) 0;
 }
 .ProseMirror [data-lang='hi'] { font-family: var(--font-hi); }
 .ProseMirror [data-lang='en'] { font-family: var(--font-en); }
@@ -496,3 +496,32 @@ table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 6px; 
 /* checkbox rows in modals */
 .checkrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: #3d4657; }
 .checkrow input { width: 18px; height: 18px; accent-color: #7a5c1e; }
+
+
+/* ============ v6 · Page setup dialog ============ */
+.modal.wide { width: min(560px, 94vw); }
+.psu-tabs { display: flex; gap: 4px; padding: 8px 14px 0; border-bottom: 1px solid var(--line); background: #faf6ec; }
+.psu-tabs button {
+  border: 1px solid transparent; border-bottom: 0; background: transparent; color: #6b6353;
+  padding: 9px 13px; border-radius: 10px 10px 0 0; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.psu-tabs button.on { background: #fff; border-color: var(--line); color: var(--ink, #2a2f3a); box-shadow: 0 -2px 0 #b8860b inset; }
+@media (pointer: coarse) { .psu-tabs button { padding: 13px 15px; font-size: 14px; } }
+.psu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.psu-grid.two { grid-template-columns: repeat(2, 1fr); }
+.psu-grid.six { grid-template-columns: repeat(4, 1fr); }
+.psu-grid .btn { width: 100%; }
+.stepper {
+  display: flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+  border-radius: 10px; padding: 6px 10px; background: #fffdf7;
+}
+.stepper .st-label { flex: 1; font-size: 13px; color: #4c5464; }
+.stepper .st-val { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; }
+.stepper button {
+  width: 34px; height: 32px; border: 1px solid #d9cfb8; border-radius: 8px; background: #f7efdc;
+  font-size: 16px; cursor: pointer; color: #4a3c22; line-height: 1;
+}
+.stepper button:active { background: #ecdfc0; }
+@media (pointer: coarse) { .stepper button { width: 44px; height: 40px; font-size: 19px; } .stepper { padding: 8px 10px; } }
+.grow { flex: 1; }
+.grow input { width: 100%; }

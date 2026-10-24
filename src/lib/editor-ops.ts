@@ -196,3 +196,14 @@ export function tocBlocks(editor: Editor): Block[] {
   });
   return out;
 }
+
+/** Apply an alignment to EVERY paragraph/heading in the document. */
+export function applyAlignAll(editor: Editor, align: 'left' | 'center' | 'right' | 'justify') {
+  const { tr } = editor.state;
+  editor.state.doc.forEach((node, offset) => {
+    if (node.type.name === 'paragraph' || node.type.name === 'heading') {
+      tr.setNodeMarkup(offset, undefined, { ...node.attrs, textAlign: align });
+    }
+  });
+  editor.view.dispatch(tr);
+}

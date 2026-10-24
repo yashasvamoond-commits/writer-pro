@@ -40,6 +40,15 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v6 — proper Page Setup dialog)
+
+- **📐 Page setup dialog** (View ▸ Page setup) with four tabs:
+  - **Paper & margins** — A4 / Legal / Letter / **custom size in inches**; every margin individually adjustable with −/＋ steppers (0–4″, 0.25″ steps) plus Court / Normal / Narrow / Wide presets.
+  - **Spacing & columns** — line spacing 1.0–3.0, paragraph spacing before/after (pt), 1–3 columns.
+  - **Alignment** — default alignment for new paragraphs (left/center/right/justify) and one-tap *apply to whole document*.
+  - **Header / footer** — header & footer text, watermark, footer page numbers, and **“header not on first page”** (Word-style different first page — hidden on screen/print page 1 and via DOCX `titlePage` first-page header).
+- Custom page size flows through screen sheet, print `@page` rule and DOCX section geometry.
+
 ## Feature highlights (v5 — free layout & full Word-style toolkit)
 
 - **Free text boxes** — drag anywhere on the page, resize from the corner, per-box font size & alignment; they print exactly where you place them and ride along in DOCX export.

@@ -3,7 +3,7 @@ import type { Editor } from '@tiptap/react';
 import { saveAs } from 'file-saver';
 import Tesseract from 'tesseract.js';
 import { AFFIDAVIT_BLOCK, IDENTIFICATION_CERT, VERIFICATION_EN, VERIFICATION_HI, parseBlocks } from '../lib/templates';
-import { appendBlocks, findRanges, nextFootnoteNumber, replaceAll } from '../lib/editor-ops';
+import { appendBlocks, applyAlignAll, findRanges, nextFootnoteNumber, replaceAll } from '../lib/editor-ops';
 import { krutiDevToUnicode } from '../lib/krutidev';
 import { exportDocx } from '../lib/docx';
 import { DocRecord, PageSettings } from '../types';
@@ -227,36 +227,136 @@ export function DocsModal({ open, onClose, currentId, onOpen, toast, currentDoc,
   );
 }
 
-/* ---------------- Header & footer ---------------- */
-export function HeaderFooterModal({ open, onClose, settings, patch }: {
+/* ---------------- Page setup (paper · margins · spacing · alignment · header/footer) ---------------- */
+type PsuTab = 'paper' | 'layout' | 'align' | 'hf';
+
+function Stepper({ label, value, min, max, step, fmt, onSet }: {
+  label: string; value: number; min: number; max: number; step: number; fmt: (v: number) => string; onSet: (v: number) => void;
+}) {
+  return (
+    <div className="stepper">
+      <span className="st-label">{label}</span>
+      <button onClick={() => onSet(Math.max(min, +(value - step).toFixed(2)))}>−</button>
+      <span className="st-val">{fmt(value)}</span>
+      <button onClick={() => onSet(Math.min(max, +(value + step).toFixed(2)))}>＋</button>
+    </div>
+  );
+}
+
+export function PageSetupModal({ open, onClose, settings, patch, editor, toast }: {
   open: boolean; onClose: () => void; settings: PageSettings; patch: (p: Partial<PageSettings>) => void;
+  editor: Editor | null; toast: (m: string) => void;
 }) {
   const { t } = useI18n();
+  const [tab, setTab] = useState<PsuTab>('paper');
   const [h, setH] = useState(settings.headerText);
   const [f, setF] = useState(settings.footerText);
   const [w, setW] = useState(settings.watermark);
   if (!open) return null;
+  const inch = (v: number) => `${v.toFixed(2)}″`;
   return (
     <div className="modal-back">
-      <div className="modal">
-        <header>{t('hfTitle')}</header>
+      <div className="modal wide">
+        <header>{t('pageSetupTitle')}</header>
+        <div className="psu-tabs">
+          <button className={tab === 'paper' ? 'on' : ''} onClick={() => setTab('paper')}>📄 {t('tabPaper')}</button>
+          <button className={tab === 'layout' ? 'on' : ''} onClick={() => setTab('layout')}>↕ {t('tabLayout')}</button>
+          <button className={tab === 'align' ? 'on' : ''} onClick={() => setTab('align')}>⇔ {t('tabAlign')}</button>
+          <button className={tab === 'hf' ? 'on' : ''} onClick={() => setTab('hf')}>📑 {t('tabHF')}</button>
+        </div>
         <div className="mbody">
-          <div className="field"><label>{t('hfHeader')}</label><textarea rows={2} value={h} onChange={(e) => setH(e.target.value)} /></div>
-          <div className="field"><label>{t('hfFooter')}</label><textarea rows={2} value={f} onChange={(e) => setF(e.target.value)} /></div>
-          <div className="field"><label>{t('watermark')}</label>
-            <input value={w} onChange={(e) => setW(e.target.value)} placeholder="DRAFT / प्रारूप" />
-          </div>
-          <div className="field"><label>{t('columns')}</label>
-            <div className="row">
-              {([1, 2, 3] as const).map((c) => (
-                <button key={c} className={`btn ${settings.columns === c ? 'primary' : ''}`} onClick={() => patch({ columns: c })}>{t(`col${c}`)}</button>
-              ))}
-            </div>
-          </div>
-          <label className="checkrow"><input type="checkbox" checked={settings.pageNumbers} onChange={(e) => patch({ pageNumbers: e.target.checked })} /> {t('pageNumbers')}</label>
+          {tab === 'paper' && (
+            <>
+              <div className="field"><label>{t('paperSize')}</label>
+                <div className="psu-grid">
+                  {(['A4', 'LEGAL', 'LETTER', 'CUSTOM'] as const).map((ps) => (
+                    <button key={ps} className={`btn ${settings.pageSize === ps ? 'primary' : ''}`} onClick={() => patch({ pageSize: ps })}>
+                      {ps === 'CUSTOM' ? t('customSize') : ps === 'LEGAL' ? 'Legal 8.5×14″' : ps === 'LETTER' ? 'Letter 8.5×11″' : 'A4 210×297mm'}
+                    </button>
+                  ))}
+                </div>
+                {settings.pageSize === 'CUSTOM' && (
+                  <div className="row" style={{ marginTop: 8, gap: 10 }}>
+                    <label className="grow"><span className="muted">{t('widthIn')}</span>
+                      <input type="number" min={3} max={20} step={0.1} value={settings.customWIn}
+                        onChange={(e) => patch({ customWIn: Math.min(20, Math.max(3, Number(e.target.value) || 8.27)) })} />
+                    </label>
+                    <label className="grow"><span className="muted">{t('heightIn')}</span>
+                      <input type="number" min={3} max={30} step={0.1} value={settings.customHIn}
+                        onChange={(e) => patch({ customHIn: Math.min(30, Math.max(3, Number(e.target.value) || 11.69)) })} />
+                    </label>
+                  </div>
+                )}
+              </div>
+              <div className="field"><label>{t('margins')}</label>
+                <div className="psu-grid two">
+                  <Stepper label={t('mTop')} value={settings.marginT} min={0} max={4} step={0.25} fmt={inch} onSet={(v) => patch({ marginT: v })} />
+                  <Stepper label={t('mBottom')} value={settings.marginB} min={0} max={4} step={0.25} fmt={inch} onSet={(v) => patch({ marginB: v })} />
+                  <Stepper label={t('mLeft')} value={settings.marginL} min={0} max={4} step={0.25} fmt={inch} onSet={(v) => patch({ marginL: v })} />
+                  <Stepper label={t('mRight')} value={settings.marginR} min={0} max={4} step={0.25} fmt={inch} onSet={(v) => patch({ marginR: v })} />
+                </div>
+                <div className="row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
+                  <button className="btn" onClick={() => patch({ marginL: 1.75, marginR: 1, marginT: 1, marginB: 1 })}>{t('presetCourt')}</button>
+                  <button className="btn" onClick={() => patch({ marginL: 1, marginR: 1, marginT: 1, marginB: 1 })}>{t('presetNormal')}</button>
+                  <button className="btn" onClick={() => patch({ marginL: 0.5, marginR: 0.5, marginT: 0.5, marginB: 0.5 })}>{t('presetNarrow')}</button>
+                  <button className="btn" onClick={() => patch({ marginL: 2, marginR: 2, marginT: 1.5, marginB: 1.5 })}>{t('presetWide')}</button>
+                </div>
+              </div>
+            </>
+          )}
+          {tab === 'layout' && (
+            <>
+              <div className="field"><label>{t('lineSp')}</label>
+                <div className="psu-grid six">
+                  {[1, 1.15, 1.5, 1.75, 2, 2.5, 3].map((lh) => (
+                    <button key={lh} className={`btn ${settings.lineHeight === lh ? 'primary' : ''}`} onClick={() => patch({ lineHeight: lh })}>{lh.toFixed(2)}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="field"><label>{t('paraSpacing')}</label>
+                <div className="psu-grid two">
+                  <Stepper label={t('spacingBefore')} value={settings.spacingBefore} min={0} max={36} step={2} fmt={(v) => `${v} pt`} onSet={(v) => patch({ spacingBefore: v })} />
+                  <Stepper label={t('spacingAfter')} value={settings.spacingAfter} min={0} max={36} step={2} fmt={(v) => `${v} pt`} onSet={(v) => patch({ spacingAfter: v })} />
+                </div>
+              </div>
+              <div className="field"><label>{t('columns')}</label>
+                <div className="psu-grid">
+                  {([1, 2, 3] as const).map((c) => (
+                    <button key={c} className={`btn ${settings.columns === c ? 'primary' : ''}`} onClick={() => patch({ columns: c })}>{t(`col${c}`)}</button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+          {tab === 'align' && (
+            <>
+              <div className="field"><label>{t('defaultAlign')}</label>
+                <div className="psu-grid">
+                  {(['left', 'center', 'right', 'justify'] as const).map((a) => (
+                    <button key={a} className={`btn ${settings.defaultAlign === a ? 'primary' : ''}`} onClick={() => patch({ defaultAlign: a })}>
+                      {a === 'left' ? '⬅ ' + t('alLeft') : a === 'center' ? '☰ ' + t('alCenter') : a === 'right' ? '➡ ' + t('alRight') : '⇔ ' + t('alJustify')}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted" style={{ marginTop: 6 }}>{t('defaultAlignHint')}</p>
+                <button className="btn" style={{ marginTop: 8 }} onClick={() => { if (editor) { applyAlignAll(editor, settings.defaultAlign); toast('✓ ' + t('appliedDoc')); } }}>{t('applyToDoc')}</button>
+              </div>
+            </>
+          )}
+          {tab === 'hf' && (
+            <>
+              <div className="field"><label>{t('hfHeader')}</label><textarea rows={2} value={h} onChange={(e) => setH(e.target.value)} /></div>
+              <div className="field"><label>{t('hfFooter')}</label><textarea rows={2} value={f} onChange={(e) => setF(e.target.value)} /></div>
+              <label className="checkrow"><input type="checkbox" checked={settings.firstPageDifferent} onChange={(e) => patch({ firstPageDifferent: e.target.checked })} /> {t('firstPageNoHeader')}</label>
+              <div className="field"><label>{t('watermark')}</label>
+                <input value={w} onChange={(e) => setW(e.target.value)} placeholder="DRAFT / प्रारूप" />
+              </div>
+              <label className="checkrow"><input type="checkbox" checked={settings.pageNumbers} onChange={(e) => patch({ pageNumbers: e.target.checked })} /> {t('pageNumbers')}</label>
+            </>
+          )}
         </div>
         <footer>
-          <button className="btn ghost" onClick={onClose}>{t('cancel')}</button>
+          <button className="btn ghost" onClick={onClose}>{t('close')}</button>
           <button className="btn primary" onClick={() => { patch({ headerText: h, footerText: f, watermark: w }); onClose(); }}>{t('save')}</button>
         </footer>
       </div>

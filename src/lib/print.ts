@@ -13,7 +13,10 @@ export function applyPageRule(s: PageSettings) {
     el.id = 'writerpro-page-rule';
     document.head.appendChild(el);
   }
-  const size = s.pageSize === 'A4' ? 'A4' : 'legal';
+  const size =
+    s.pageSize === 'A4' ? 'A4' :
+    s.pageSize === 'LETTER' ? 'letter' :
+    s.pageSize === 'CUSTOM' ? `${s.customWIn}in ${s.customHIn}in` : 'legal';
   el.textContent = `@page { size: ${size} portrait; margin: ${s.marginT}in ${s.marginR}in ${s.marginB}in ${s.marginL}in; }`;
 }
 

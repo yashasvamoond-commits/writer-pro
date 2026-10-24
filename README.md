@@ -40,6 +40,15 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v9 — the complete paralegal workbench)
+
+- **👥 Party-wise view** — every file of one client grouped together (client extracted from "X vs Y" / "X वनाम Y" titles, grouped case-insensitively; falls back to advocate name).
+- **📦 Filing bundles** — one tap zips a court's selected documents into `JM/ ACJM/ ADJ/ SDM/ AECM/ Misc` folders **with an auto-generated INDEX.docx + INDEX.csv** (parties, case no, FIR/PS, sections, type, next date, notes); "Bundle all" does every court at once. Works even after restart as an index-only bundle.
+- **🔔 Android hearing reminders** — real local notifications (no server): for every ledger date within 60 days the clerk schedules **8 pm the evening before** and **9 am on the day** ("आज सुनवाई · Hearing TODAY"), re-synced on each tap; permission requested at runtime.
+- **📝 Clerk notes** — attach a note to any file (persists in the register, survives re-scans, appears in CSV/Word exports and bundles).
+- **Tap-to-copy** — parties, case no and FIR no copy to clipboard on tap (agenda rows too).
+- **Court stats** — each court header shows pending · decided · ⏰ upcoming-dated counts.
+
 ## Feature highlights (v8 — Clerk becomes a paralegal)
 
 - **Case intelligence per file** — the clerk now reads out of every document: **case number, FIR number, police station, sections** (IPC/BNS/CrPC/BNSS/NDPS…), **parties (X vs Y)**, **document type** (charge-sheet, bail, judgment, FIR copy, complaint, affidavit, vakalatnama, petition, summons, warrant, reply, order, application), **advocate name**, **next hearing date** and **decided date** — English and Hindi patterns, OCR'd scans included.

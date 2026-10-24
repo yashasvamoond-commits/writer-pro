@@ -1,29 +1,32 @@
 /**
- * 🧑‍⚖ Smart Clerk — paralegal workbench.
+ * 🧑‍⚖ Smart Clerk — full paralegal workbench.
  *
  *  • reads every PDF/Word/text/image file you pick (offline; scans → OCR)
  *  • files each document under the court named INSIDE it (JM · ACJM · ADJ ·
  *    SDM · AECM), Miscellaneous only when no court heading exists
  *  • extracts case no · FIR no · police station · sections · parties ·
  *    next hearing date · decided date · document type · advocate
- *  • keeps a persistent court-wise ledger + 📅 agenda of upcoming dates
- *  • exports the whole register (CSV / Word) and opens any file's text as a
- *    draft in the editor — all on-device.
+ *  • 📅 agenda + 🔔 Android reminders (evening-before 8 pm & morning-of 9 am)
+ *  • 👥 party-wise view — every file of one client together
+ *  • 📦 filing bundles — zip a court's documents with an auto INDEX.docx/INDEX.csv
+ *  • 📒 persistent register with CSV/Word export, per-file notes, tap-to-copy
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { saveAs } from 'file-saver';
 import { renderAsync } from 'docx-preview';
+import JSZip from 'jszip';
 import type { Editor } from '@tiptap/react';
 import { AlignmentType, Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow, TextRun, WidthType } from 'docx';
 import { useI18n } from '../data/i18n';
 import { COURT_ORDER, CourtId } from '../lib/court-classify';
-import { fmtDate, daysUntil } from '../lib/clerk-extract';
+import { fmtDate, daysUntil, splitParties, partyKey } from '../lib/clerk-extract';
 import {
   FileKind, kindOf, pdfToDocx, pdfToHtml, pdfToPngZip, pdfToTxt, docxToHtmlString, docxToTxt,
   ocrImage, readFileSmart, ReadResult, targetsFor, Target, TARGET_LABEL, txtToDocx,
 } from '../lib/clerk';
 import { insertTextAtCursor } from '../lib/editor-ops';
+import { remindersAvailable, remindersForDate, syncReminders } from '../lib/notify';
 
 interface ClerkEntry {
   id: string;
@@ -40,6 +43,7 @@ interface LedgerItem {
   name: string; court: CourtId; at: number; ocr: boolean;
   caseNo?: string; firNo?: string; psName?: string; sections?: string[];
   title?: string; nextDate?: string; decidedDate?: string; docType?: string; advocate?: string;
+  note?: string;
 }
 const LKEY = 'writerpro.clerk.ledger.v2';
 function loadLedger(): LedgerItem[] {
@@ -58,9 +62,51 @@ const COURT_LABEL: Record<CourtId, string> = {
   aecm: 'AECM · अतिरिक्त कार्यपालक मजिस्ट्रेट',
   misc: 'Miscellaneous · विविध',
 };
+const COURT_SHORT = (c: CourtId) => COURT_LABEL[c].split(' · ')[0];
 const KIND_ICON: Record<FileKind, string> = { pdf: '📕', docx: '📘', doc: '📙', txt: '📄', html: '🌐', image: '🖼', other: '📎' };
 
 interface PrintJob { kind: 'docx' | 'raw'; title: string; margin: string; data?: ArrayBuffer; html?: string }
+
+/* ---------------- register builders (shared by export & bundles) ---------------- */
+function registerCsv(items: LedgerItem[]): string {
+  const head = ['Court', 'File', 'Title/Parties', 'Case No', 'FIR No', 'Police Station', 'Sections', 'Doc type', 'Next date', 'Decided', 'Advocate', 'Note', 'OCR', 'Scanned at'];
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const lines = [head.join(',')];
+  for (const l of items) {
+    lines.push([COURT_SHORT(l.court), l.name, l.title, l.caseNo, l.firNo, l.psName,
+      (l.sections || []).join(' '), l.docType, l.nextDate, l.decidedDate, l.advocate, l.note,
+      l.ocr ? 'yes' : 'no', new Date(l.at).toISOString()].map(esc).join(','));
+  }
+  return '\ufeff' + lines.join('\n');
+}
+
+async function registerDocxBlob(items: LedgerItem[], title: string): Promise<Blob> {
+  const kids: (Paragraph | Table)[] = [new Paragraph({
+    alignment: AlignmentType.CENTER, heading: HeadingLevel.HEADING_1,
+    children: [new TextRun({ text: title, bold: true, size: 30 })],
+  })];
+  for (const c of COURT_ORDER) {
+    const rows4 = items.filter((l) => l.court === c);
+    if (!rows4.length) continue;
+    kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: `${COURT_LABEL[c]} (${rows4.length})`, bold: true, size: 26 })] }));
+    const rows = [new TableRow({
+      tableHeader: true,
+      children: ['File', 'Parties', 'Case No', 'FIR/PS', 'Sections', 'Type', 'Next date', 'Note'].map((h) =>
+        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 18 })] })] })),
+    })];
+    for (const l of rows4) {
+      rows.push(new TableRow({
+        children: [l.name, l.title || '', l.caseNo || '', [l.firNo, l.psName].filter(Boolean).join(' · '),
+          (l.sections || []).join(', '), l.docType || '', l.nextDate ? fmtDate(l.nextDate) : '', l.note || ''].map((v) =>
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(v), size: 18 })] })] })),
+      }));
+    }
+    kids.push(new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+    kids.push(new Paragraph({ children: [new TextRun('')] }));
+  }
+  const doc = new Document({ creator: 'Writer Pro Smart Clerk', title, sections: [{ properties: {}, children: kids }] });
+  return Packer.toBlob(doc);
+}
 
 export default function ClerkPane({ toast, editor }: { toast: (m: string) => void; editor: Editor | null }) {
   const { t } = useI18n();
@@ -69,6 +115,7 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
   const [busy, setBusy] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState('');
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<'courts' | 'parties'>('courts');
   const [job, setJob] = useState<PrintJob | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirRef = useRef<HTMLInputElement>(null);
@@ -84,6 +131,12 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
   const patchEntry = (id: string, p: Partial<ClerkEntry>) =>
     setEntries((cur) => cur.map((e) => (e.id === id ? { ...e, ...p } : e)));
 
+  const updateLedger = (fn: (items: LedgerItem[]) => LedgerItem[]) => {
+    const next = fn(loadLedger());
+    saveLedger(next);
+    setLedger(next);
+  };
+
   const scan = async (files: File[]) => {
     const docs = files.filter((f) => kindOf(f.name) !== 'other');
     if (!docs.length) { toast(t('clerkNoFiles')); return; }
@@ -98,13 +151,12 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
         const res = await readFileSmart(e.file, (p) => patchEntry(e.id, { progress: p }));
         patchEntry(e.id, { status: 'ok', res, progress: undefined });
         const m = res.meta;
-        const item: LedgerItem = {
+        updateLedger((old) => [{
           name: e.name, court: res.cls.court, at: Date.now(), ocr: res.ocr,
           caseNo: m.caseNo, firNo: m.firNo, psName: m.psName, sections: m.sections.length ? m.sections : undefined,
           title: m.title, nextDate: m.nextDate, decidedDate: m.decidedDate, docType: m.docType, advocate: m.advocate,
-        };
-        const led = [item, ...loadLedger().filter((l) => l.name !== e.name)];
-        saveLedger(led); setLedger(led);
+          note: old.find((l) => l.name === e.name)?.note, // keep earlier note on re-scan
+        }, ...old.filter((l) => l.name !== e.name)]);
       } catch {
         patchEntry(e.id, { status: 'err', progress: undefined });
       }
@@ -113,52 +165,60 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
     toast(t('clerkScanDone'));
   };
 
-  /* ---------- register export (ledger = persistent knowledge) ---------- */
-  const rowsFor = (items: LedgerItem[]) => items;
+  /* ---------- register exports ---------- */
   const exportCsv = () => {
-    const head = ['Court', 'File', 'Title/Parties', 'Case No', 'FIR No', 'Police Station', 'Sections', 'Doc type', 'Next date', 'Decided', 'Advocate', 'OCR', 'Scanned at'];
-    const esc = (v?: string) => `"${(v || '').replace(/"/g, '""')}"`;
-    const lines = [head.join(',')];
-    for (const l of rowsFor(ledger)) {
-      lines.push([COURT_LABEL[l.court].split(' · ')[0], l.name, l.title, l.caseNo, l.firNo, l.psName,
-        (l.sections || []).join(' '), l.docType, l.nextDate, l.decidedDate, l.advocate, l.ocr ? 'yes' : 'no',
-        new Date(l.at).toISOString()].map((x) => esc(x === undefined ? '' : String(x))).join(','));
-    }
-    saveAs(new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }), 'court-register.csv');
+    saveAs(new Blob([registerCsv(ledger)], { type: 'text/csv;charset=utf-8' }), 'court-register.csv');
     toast('CSV ✓');
   };
   const exportRegisterDocx = async () => {
-    const kids: (Paragraph | Table)[] = [new Paragraph({
-      alignment: AlignmentType.CENTER, heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: 'COURT-WISE DOCUMENT REGISTER / न्यायालय-वार दस्तावेज़ रजिस्टर', bold: true, size: 30 })],
-    })];
-    for (const c of COURT_ORDER) {
-      const items = ledger.filter((l) => l.court === c);
-      if (!items.length) continue;
-      kids.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: `${COURT_LABEL[c]} (${items.length})`, bold: true, size: 26 })] }));
-      const rows = [new TableRow({
-        tableHeader: true,
-        children: ['File', 'Parties', 'Case No', 'FIR/PS', 'Sections', 'Type', 'Next date'].map((h) =>
-          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: h, bold: true, size: 18 })] })] })),
-      })];
-      for (const l of items) {
-        rows.push(new TableRow({
-          children: [l.name, l.title || '', l.caseNo || '', [l.firNo, l.psName].filter(Boolean).join(' · '),
-            (l.sections || []).join(', '), l.docType || '', l.nextDate ? fmtDate(l.nextDate) : ''].map((v) =>
-            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(v), size: 18 })] })] })),
-        }));
-      }
-      kids.push(new Table({ rows, width: { size: 100, type: WidthType.PERCENTAGE } }));
-      kids.push(new Paragraph({ children: [new TextRun('')] }));
-    }
-    const doc = new Document({ creator: 'Writer Pro Smart Clerk', title: 'Court register', sections: [{ properties: {}, children: kids }] });
-    saveAs(await Packer.toBlob(doc), 'court-register.docx');
+    saveAs(await registerDocxBlob(ledger, 'COURT-WISE DOCUMENT REGISTER / न्यायालय-वार दस्तावेज़ रजिस्टर'), 'court-register.docx');
     toast('DOCX ✓');
   };
 
-  /* ---------- agenda: upcoming hearing dates from ledger ---------- */
+  /* ---------- 📦 filing bundles ---------- */
+  const bundle = async (court: CourtId | 'all') => {
+    setBusy(`bundle:${court}`);
+    try {
+      const courts = court === 'all' ? COURT_ORDER : [court];
+      const items = ledger.filter((l) => courts.includes(l.court));
+      const zip = new JSZip();
+      let files = 0;
+      for (const c of courts) {
+        const folder = zip.folder(COURT_SHORT(c))!;
+        for (const e of entries.filter((x) => x.status === 'ok' && x.res?.cls.court === c)) {
+          folder.file(e.name, e.file);
+          files++;
+        }
+      }
+      zip.file('INDEX.csv', registerCsv(items));
+      zip.file('INDEX.docx', await (await registerDocxBlob(items, `FILING INDEX — ${court === 'all' ? 'ALL COURTS' : COURT_LABEL[court]}`)).arrayBuffer());
+      const name = court === 'all' ? 'filing-bundle-all.zip' : `filing-bundle-${COURT_SHORT(court).toLowerCase()}.zip`;
+      saveAs(await zip.generateAsync({ type: 'blob' }), name);
+      toast(files ? `📦 ${files} + INDEX ✓` : `📦 ${t('clerkBundleIdxOnly')}`);
+    } catch {
+      toast(t('clerkConvErr'));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /* ---------- 🔔 reminders ---------- */
+  const armReminders = async () => {
+    if (!remindersAvailable()) { toast(t('clerkRemNA')); return; }
+    setBusy('reminders');
+    const items = ledger.filter((l) => l.nextDate && daysUntil(l.nextDate) >= 0 && daysUntil(l.nextDate) <= 60);
+    const rems = items.flatMap((l) => remindersForDate(
+      l.nextDate!,
+      `${COURT_SHORT(l.court)}${l.caseNo ? ` · ${l.caseNo}` : ''}`,
+      `${l.title || l.name} — ${COURT_LABEL[l.court]}`,
+    ));
+    const n = await syncReminders(rems);
+    setBusy(null);
+    toast(n >= 0 ? `🔔 ${t('clerkRemSet').replace('{n}', String(n))}` : t('clerkRemDenied'));
+  };
+
+  /* ---------- agenda ---------- */
   const agenda = useMemo(() => {
-    const now = new Date();
     return ledger
       .filter((l) => l.nextDate)
       .map((l) => ({ l, d: daysUntil(l.nextDate!) }))
@@ -167,16 +227,42 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
       .slice(0, 12);
   }, [ledger]);
 
-  /* ---------- search filter ---------- */
+  /* ---------- search ---------- */
   const q = query.trim().toLowerCase();
+  const matchesLedger = (l: LedgerItem) => !q || [l.name, l.caseNo, l.firNo, l.title, l.psName, l.docType, l.note, ...(l.sections || [])]
+    .some((v) => v && String(v).toLowerCase().includes(q));
   const matches = (e: ClerkEntry) => !q || [e.name, e.res?.cls.court, e.res?.meta.caseNo, e.res?.meta.firNo,
     e.res?.meta.title, e.res?.meta.psName, e.res?.meta.docType, ...(e.res?.meta.sections || [])]
     .some((v) => v && String(v).toLowerCase().includes(q));
 
-  const grouped = COURT_ORDER.map((c) => ({
-    court: c,
-    rows: entries.filter((e) => e.status === 'ok' && e.res?.cls.court === c && matches(e)),
-  })).filter((g) => g.rows.length);
+  const grouped = COURT_ORDER.map((c) => {
+    const rows = entries.filter((e) => e.status === 'ok' && e.res?.cls.court === c && matches(e));
+    const led = ledger.filter((l) => l.court === c && matchesLedger(l));
+    return {
+      court: c, rows,
+      stats: {
+        total: led.length,
+        pending: led.filter((l) => !l.decidedDate).length,
+        decided: led.filter((l) => l.decidedDate).length,
+        dated: led.filter((l) => l.nextDate && daysUntil(l.nextDate) >= 0).length,
+      },
+    };
+  }).filter((g) => g.rows.length || (q ? g.stats.total : 0));
+
+  /* ---------- parties view ---------- */
+  const partyGroups = useMemo(() => {
+    const map = new Map<string, LedgerItem[]>();
+    for (const l of ledger) {
+      if (!matchesLedger(l)) continue;
+      const key = partyKey(splitParties(l.title).first) || partyKey(l.advocate) || '';
+      if (!key) continue;
+      const arr = map.get(key) || [];
+      arr.push(l);
+      map.set(key, arr);
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 40);
+  }, [ledger, q]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const working = entries.filter((e) => e.status !== 'ok');
 
   const doPrint = () => {
@@ -240,6 +326,19 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
     toast(t('clerkDrafted'));
   };
 
+  const copy = async (text?: string) => {
+    if (!text) return;
+    try { await navigator.clipboard.writeText(text); toast(`⧉ ${text}`); } catch { toast(text); }
+  };
+
+  const editNote = (name: string) => {
+    const cur = loadLedger().find((l) => l.name === name)?.note || '';
+    const n = window.prompt(t('clerkNotePrompt'), cur);
+    if (n === null) return;
+    updateLedger((old) => old.map((l) => (l.name === name ? { ...l, note: n || undefined } : l)));
+    toast('📝 ✓');
+  };
+
   return (
     <div className="pane clerk-pane">
       <h4>🧑‍⚖ {t('clerkTitle')}</h4>
@@ -256,10 +355,23 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
         webkitdirectory="" directory=""
         onChange={(ev) => { const fs = [...(ev.target.files || [])].filter((f) => kindOf(f.name) !== 'other'); if (fs.length) void scan(fs); ev.target.value = ''; }} />
 
+      <div className="clerk-switch">
+        <button className={view === 'courts' ? 'on' : ''} onClick={() => setView('courts')}>🏛 {t('clerkViewCourts')}</button>
+        <button className={view === 'parties' ? 'on' : ''} onClick={() => setView('parties')}>👥 {t('clerkViewParties')}</button>
+      </div>
+
       {ledger.length > 0 && (
         <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
           <button className="btn" onClick={exportCsv}>⬇ {t('clerkExportCsv')}</button>
           <button className="btn" onClick={() => void exportRegisterDocx()}>⬇ {t('clerkExportDocx')}</button>
+          <button className="btn" onClick={() => void bundle('all')} disabled={!!busy}>
+            {busy === 'bundle:all' ? '⏳' : '📦'} {t('clerkBundleAll')}
+          </button>
+          {remindersAvailable() && (
+            <button className="btn" onClick={() => void armReminders()} disabled={!!busy}>
+              {busy === 'reminders' ? '⏳' : '🔔'} {t('clerkReminders')}
+            </button>
+          )}
           <button className="btn ghost" onClick={() => { saveLedger([]); setLedger([]); }}>{t('clerkClear')}</button>
           <span className="muted small" style={{ alignSelf: 'center' }}>{ledger.length} {t('clerkLedgerCount')}</span>
         </div>
@@ -271,60 +383,70 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
           {agenda.map(({ l, d }, i) => (
             <div className={`ag-row ${d === 0 ? 'today' : d <= 3 ? 'soon' : d <= 7 ? 'week' : ''}`} key={i}>
               <span className="ag-date">{d === 0 ? t('clerkToday') : fmtDate(l.nextDate)}</span>
-              <span className="ag-body">
-                <b>{COURT_LABEL[l.court].split(' · ')[0]}</b> {l.caseNo || l.name}
+              <span className="ag-body" onClick={() => copy(l.caseNo || l.name)}>
+                <b>{COURT_SHORT(l.court)}</b> {l.caseNo || l.name}
                 {l.title && <span className="muted small"> · {l.title}</span>}
               </span>
+              <button className="btn tiny" title={t('clerkNote')} onClick={() => editNote(l.name)}>📝</button>
             </div>
           ))}
         </div>
       )}
 
-      {(entries.length > 0 || q) && (
+      {(entries.length > 0 || ledger.length > 0) && (
         <input className="clerk-search" placeholder={`🔍 ${t('clerkSearch')}`} value={query} onChange={(e) => setQuery(e.target.value)} />
       )}
       {scanNote && <div className="clerk-progress">⏳ {t('clerkReading')} {scanNote}</div>}
 
-      {grouped.map((g) => (
+      {view === 'courts' && grouped.map((g) => (
         <div className="court-group" key={g.court}>
           <div className={`court-head ${g.court}`}>
-            <b>{COURT_LABEL[g.court]}</b><span className="cnt">{g.rows.length}</span>
+            <b>{COURT_LABEL[g.court]}</b>
+            {g.stats.total > 0 && (
+              <span className="court-stats">
+                {g.stats.pending} {t('clerkPending')} · {g.stats.decided} {t('clerkDecided')}
+                {g.stats.dated > 0 && <> · ⏰ {g.stats.dated}</>}
+              </span>
+            )}
+            <span className="cnt">{g.rows.length || g.stats.total}</span>
+            <button className="btn tiny bundle" disabled={!!busy} onClick={() => void bundle(g.court)} title={t('clerkBundle')}>
+              {busy === `bundle:${g.court}` ? '⏳' : '📦'}
+            </button>
           </div>
           {g.rows.map((e) => (
-            <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor} />
+            <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor}
+              onCopy={copy} onNote={() => editNote(e.name)}
+              note={loadLedger().find((l) => l.name === e.name)?.note} />
+          ))}
+          {!g.rows.length && ledger.filter((l) => l.court === g.court && matchesLedger(l)).map((l, i) => (
+            <LedgerRow key={i} l={l} onCopy={copy} onNote={() => editNote(l.name)} />
           ))}
         </div>
       ))}
 
+      {view === 'parties' && (
+        partyGroups.length ? partyGroups.map(([name, items]) => (
+          <div className="court-group" key={name}>
+            <div className="court-head party">
+              <b>👤 {splitParties(items[0].title).first || name}</b>
+              <span className="cnt">{items.length}</span>
+            </div>
+            {items.slice(0, 12).map((l, i) => <LedgerRow key={i} l={l} onCopy={copy} onNote={() => editNote(l.name)} showCourt />)}
+          </div>
+        )) : <p className="muted small" style={{ marginTop: 10 }}>{t('clerkNoParties')}</p>
+      )}
+
       {working.length > 0 && (
         <div className="court-group">
           <div className="court-head work"><b>{t('clerkReading')}</b><span className="cnt">{working.length}</span></div>
-          {working.map((e) => <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor} />)}
+          {working.map((e) => <ClerkRow key={e.id} e={e} busy={busy} onConvert={convert} onDraft={() => openDraft(e)} hasEditor={!!editor} onCopy={copy} onNote={() => editNote(e.name)} />)}
         </div>
       )}
 
-      {entries.length === 0 && ledger.length > 0 && (
+      {entries.length === 0 && ledger.length > 0 && view === 'courts' && (
         <div className="clerk-ledger">
           <b>📒 {t('clerkLedger')}</b>
           <p className="muted small">{t('clerkReselect')}</p>
-          {COURT_ORDER.map((c) => {
-            const items = ledger.filter((l) => l.court === c);
-            if (!items.length) return null;
-            return (
-              <div key={c} className="ledger-court">
-                <div className={`court-head ${c}`}><b>{COURT_LABEL[c]}</b><span className="cnt">{items.length}</span></div>
-                {items.slice(0, 8).map((l, i) => (
-                  <div className="ledger-row" key={i}>
-                    📄 {l.name}
-                    <span className="muted small">
-                      {' '}· {[l.caseNo && `Case ${l.caseNo}`, l.firNo && `FIR ${l.firNo}`, l.nextDate && `⏰ ${fmtDate(l.nextDate)}`, l.docType]
-                        .filter(Boolean).join(' · ') || new Date(l.at).toLocaleDateString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
         </div>
       )}
 
@@ -348,17 +470,48 @@ export default function ClerkPane({ toast, editor }: { toast: (m: string) => voi
   );
 }
 
-function ClerkRow({ e, busy, onConvert, onDraft, hasEditor }: {
+function LedgerRow({ l, onCopy, onNote, showCourt }: {
+  l: LedgerItem; onCopy: (s?: string) => void; onNote: () => void; showCourt?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="clerk-row">
+      <div className="cr-main">
+        <span className="cr-icon">📄</span>
+        <span className="cr-name" title={l.name}>{l.name}</span>
+        {showCourt && <span className="badge court-mini">{COURT_SHORT(l.court)}</span>}
+        {l.nextDate && daysUntil(l.nextDate) >= 0 && daysUntil(l.nextDate) <= 7 && (
+          <span className="badge alert">⏰ {fmtDate(l.nextDate)}</span>
+        )}
+      </div>
+      <div className="cr-meta">
+        {l.title && <span onClick={() => onCopy(l.title)}><em>{t('clerkMetaTitle')}</em> {l.title}</span>}
+        {l.caseNo && <span onClick={() => onCopy(l.caseNo)}><em>{t('clerkMetaCase')}</em> {l.caseNo}</span>}
+        {l.firNo && <span onClick={() => onCopy(l.firNo)}><em>{t('clerkMetaFir')}</em> {l.firNo}</span>}
+        {l.docType && <span><em>{t('clerkMetaType')}</em> {l.docType}</span>}
+        {l.nextDate && <span><em>{t('clerkMetaNext')}</em> {fmtDate(l.nextDate)}</span>}
+        {l.decidedDate && <span><em>{t('clerkMetaDecided')}</em> {fmtDate(l.decidedDate)}</span>}
+        {l.note && <span className="cr-note">📝 {l.note}</span>}
+      </div>
+      <div className="row cr-conv" style={{ gap: 4 }}>
+        <button className="btn tiny" onClick={onNote}>📝 {t('clerkNote')}</button>
+      </div>
+    </div>
+  );
+}
+
+function ClerkRow({ e, busy, onConvert, onDraft, hasEditor, onCopy, onNote, note }: {
   e: ClerkEntry; busy: string | null; onConvert: (e: ClerkEntry, t: Target) => void; onDraft: () => void; hasEditor: boolean;
+  onCopy: (s?: string) => void; onNote: () => void; note?: string;
 }) {
   const { t } = useI18n();
   const isBusy = busy?.startsWith(e.id);
   const targets = e.status === 'ok' ? targetsFor(e.kind) : [];
   const m = e.res?.meta;
-  const metaBits: [string, string | undefined][] = m ? [
-    [t('clerkMetaTitle'), m.title],
-    [t('clerkMetaCase'), m.caseNo],
-    [t('clerkMetaFir'), m.firNo],
+  const metaBits: [string, string | undefined, boolean?][] = m ? [
+    [t('clerkMetaTitle'), m.title, true],
+    [t('clerkMetaCase'), m.caseNo, true],
+    [t('clerkMetaFir'), m.firNo, true],
     [t('clerkMetaPs'), m.psName],
     [t('clerkMetaSec'), m.sections.length ? m.sections.join(', ') : undefined],
     [t('clerkMetaType'), m.docType],
@@ -388,15 +541,18 @@ function ClerkRow({ e, busy, onConvert, onDraft, hasEditor }: {
           {e.res.cls.snippet && <div className="cr-snippet muted small">“{e.res.cls.snippet}”</div>}
           {metaBits.some(([, v]) => v) && (
             <div className="cr-meta">
-              {metaBits.filter(([, v]) => v).map(([k, v]) => (
-                <span key={k}><em>{k}</em> {v}</span>
+              {metaBits.filter(([, v]) => v).map(([k, v, copyable]) => (
+                <span key={k} onClick={copyable ? () => onCopy(v) : undefined} className={copyable ? 'copyable' : undefined}>
+                  <em>{k}</em> {v}
+                </span>
               ))}
+              {note && <span className="cr-note">📝 {note}</span>}
             </div>
           )}
         </>
       )}
       {e.status === 'err' && <div className="cr-badges"><span className="badge warn">{t('clerkErr')}</span></div>}
-      {(targets.length > 0 || (e.status === 'ok' && hasEditor && e.res?.text)) && (
+      {(targets.length > 0 || e.status === 'ok') && (
         <div className="row cr-conv" style={{ flexWrap: 'wrap', gap: 4 }}>
           <span className="muted small">🔄</span>
           {targets.map((tg) => (
@@ -406,6 +562,9 @@ function ClerkRow({ e, busy, onConvert, onDraft, hasEditor }: {
           ))}
           {e.status === 'ok' && hasEditor && e.res?.text && (
             <button className="btn tiny accent" onClick={onDraft}>✍ {t('clerkOpenDraft')}</button>
+          )}
+          {e.status === 'ok' && (
+            <button className="btn tiny" onClick={onNote}>📝 {t('clerkNote')}</button>
           )}
         </div>
       )}

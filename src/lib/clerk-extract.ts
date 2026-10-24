@@ -203,3 +203,17 @@ export function daysUntil(isoDate: string, now = new Date()): number {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((target.getTime() - today.getTime()) / 86400000);
 }
+
+/** Split "A vs B" into the two parties; the first is treated as the client. */
+export function splitParties(title?: string): { first?: string; second?: string } {
+  if (!title) return {};
+  const clean = title.replace(/\s+/g, ' ').trim();
+  const m = clean.match(/^(.{1,70}?)\s+(?:versus|vs\.?|वनाम|बनाम|विरुद्ध)\s+(.{1,70}?)\.?$/i);
+  if (!m) return { first: clean.length <= 70 ? clean : undefined };
+  return { first: m[1].trim(), second: m[2].trim() };
+}
+
+/** Stable grouping key for a party name (case/space/punctuation-insensitive). */
+export function partyKey(name?: string): string {
+  return (name || '').toLowerCase().replace(/[.,;'".!?]/g, '').replace(/\s+/g, ' ').trim();
+}

@@ -1,0 +1,68 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    name: Build & publish APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build web core (dist/)
+        run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate native Android project
+        run: npx cap add android
+
+      - name: Sync web core into Android project
+        run: npx cap sync android
+
+      - name: Assemble debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Stage APK
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk writer-pro-legal-drafter.apk
+          ls -la writer-pro-legal-drafter.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: writer-pro-apk
+          path: writer-pro-legal-drafter.apk
+
+      - name: Publish release with APK download link
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Writer Pro Legal Drafter APK (build ${{ github.run_number }})
+          body: |
+            Install on any Android phone/tablet (7.0+):
+            1. Download `writer-pro-legal-drafter.apk` below.
+            2. Allow "install unknown apps" for your browser/file manager when prompted.
+            3. Open the APK and install. Works fully offline.
+          files: writer-pro-legal-drafter.apk
+          make_latest: true

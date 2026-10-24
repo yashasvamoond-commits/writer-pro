@@ -661,3 +661,7 @@ table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 6px; 
   .tl-row { padding: 7px 0; font-size: 13.5px; }
   .tl-actions .btn.tiny { padding: 8px 11px; }
 }
+
+/* ============ v10.2 · undo/redo everywhere ============ */
+.tbtn:disabled, .tb-head button:disabled { opacity: 0.35; cursor: default; }
+.tb-head button { min-width: 24px; }

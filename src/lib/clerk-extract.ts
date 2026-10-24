@@ -5,6 +5,10 @@
  * parties/title, next hearing date, decided date, document type, advocate.
  */
 
+export type EventKey = 'fir' | 'incident' | 'arrest' | 'filed' | 'charges' | 'next' | 'decided' | 'bail' | 'date';
+
+export interface CaseEvent { iso: string; key: EventKey }
+
 export interface CaseMeta {
   caseNo?: string;
   firNo?: string;
@@ -16,6 +20,7 @@ export interface CaseMeta {
   dates: string[];     // all ISO dates found (unique, chronological)
   docType?: string;
   advocate?: string;
+  events: CaseEvent[];
 }
 
 const HI_MONTHS: Record<string, number> = {
@@ -132,7 +137,7 @@ function normDateStr(s: string): string | null {
 
 export function extractCaseMeta(text: string): CaseMeta {
   const t = (text || '').replace(/\r/g, '');
-  const meta: CaseMeta = { sections: [], dates: [] };
+  const meta: CaseMeta = { sections: [], dates: [], events: [] };
   if (!t.trim()) return meta;
 
   const caseHit = firstCapture(CASE_NO_RX, t);
@@ -162,7 +167,8 @@ export function extractCaseMeta(text: string): CaseMeta {
   let sm: RegExpExecArray | null;
   STATUTE_TOKEN.lastIndex = 0;
   while ((sm = STATUTE_TOKEN.exec(t)) && secSet.size < 16) secSet.add(`${sm[1].replace(/\s+/g, '')} ${sm[2].toUpperCase()}`);
-  meta.sections = [...secSet];
+  const secAll = [...secSet];
+  meta.sections = secAll.filter((x) => !secAll.some((o) => o !== x && o.startsWith(x + ' ')));
 
   for (const re of TITLE_RX) {
     re.lastIndex = 0;
@@ -187,6 +193,7 @@ export function extractCaseMeta(text: string): CaseMeta {
   for (const dt of DOC_TYPES) {
     if (dt.rx.some((re) => re.test(t))) { meta.docType = dt.label; break; }
   }
+  meta.events = extractEvents(t);
   return meta;
 }
 
@@ -202,6 +209,55 @@ export function daysUntil(isoDate: string, now = new Date()): number {
   const target = new Date(isoDate + 'T00:00:00');
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+const EVENT_RULES: { key: EventKey; rx: RegExp }[] = [
+  { key: 'fir', rx: /fir|f\.i\.r|प्राथमिकी|प्रथम\s*सूचना/i },
+  { key: 'incident', rx: /occur|incident|घटना|वारदात/i },
+  { key: 'arrest', rx: /arrest|गिरफ्तार/i },
+  { key: 'charges', rx: /charge[sd]?\s*(?:framed|sheet)|framed|अभियोग|चालान|दोषारोप/i },
+  { key: 'bail', rx: /\bbail\b|जमानत|जामीन/i },
+  { key: 'decided', rx: /decid|judg(?:e?ment)|pronounc|dispos|निर्णय|फैसला/i },
+  { key: 'next', rx: /next|fixed|listed|upcoming|hearing|अगली|आगामी|सुनवाई|तारीख/i },
+  { key: 'filed', rx: /filed|instituted|presented|received|दायर|प्रस्तुत|पेश|दर्ज/i },
+];
+
+/**
+ * Every date in the document, labelled by the words around it — the raw
+ * material of the case timeline. Unique (date,label) pairs, chronological.
+ */
+export function extractEvents(text: string): CaseEvent[] {
+  const t = (text || '').replace(/\r/g, '');
+  if (!t.trim()) return [];
+
+  // collect every keyword position once, then label each date by the NEAREST keyword
+  const kw: { key: EventKey; pos: number }[] = [];
+  for (const rule of EVENT_RULES) {
+    const re = new RegExp(rule.rx.source, rule.rx.flags.includes('g') ? rule.rx.flags : rule.rx.flags + 'g');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(t))) {
+      kw.push({ key: rule.key, pos: m.index + m[0].length / 2 });
+      if (kw.length > 4000) break;
+    }
+  }
+
+  const seen = new Set<string>();
+  const out: CaseEvent[] = [];
+  for (const d of findDates(t)) {
+    let best: { key: EventKey; dist: number } | null = null;
+    for (const k of kw) {
+      const raw = k.pos - d.at;
+      if (Math.abs(raw) >= 90) continue;
+      const dist = raw < 0 ? -raw * 0.8 : raw * 1.25; // keyword BEFORE the date labels it
+      if (!best || dist < best.dist) best = { key: k.key, dist };
+    }
+    const key: EventKey = best ? best.key : 'date';
+    const sig = d.iso + '|' + key;
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push({ iso: d.iso, key });
+  }
+  return out.sort((a, b) => a.iso.localeCompare(b.iso)).slice(0, 20);
 }
 
 /** Split "A vs B" into the two parties; the first is treated as the client. */

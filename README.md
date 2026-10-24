@@ -40,6 +40,12 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v10 — timelines, draft generation, WhatsApp summaries)
+
+- **🕒 Case-wise timeline** — a third clerk view groups the register into *cases* (by case no, else FIR no, per court) and lays every date of the case out in order on a colour-coded timeline: FIR registered · incident · arrest · filed/charge-sheet · hearing · decided · bail matters. Labels come from the words surrounding each date (English + Hindi), nearest-keyword wins.
+- **✍ Draft generation from metadata** — one tap on a case turns what the clerk read out of the FIR/challan into a **court-ready bail application**: the correct court header for the classified court (or a fill-in header for Miscellaneous), parties, case no, FIR no + registration date, police station, sections, arrest/incident/charge-sheet dates, prayer, place/date and an affidavit — English or Hindi per the language switch. Anything the documents didn't reveal stays as a smart-variable chip to fill once.
+- **📤 WhatsApp-ready share summary** — per case: `⚖ *CASE SUMMARY — JM*`, parties, case no, FIR·PS, sections, doc type, **next hearing in bold**, decided date, notes and file list, formatted with WhatsApp `*bold*` markers. Uses the Android share sheet when available, otherwise copies to clipboard ready to paste.
+
 ## Feature highlights (v9 — the complete paralegal workbench)
 
 - **👥 Party-wise view** — every file of one client grouped together (client extracted from "X vs Y" / "X वनाम Y" titles, grouped case-insensitively; falls back to advocate name).

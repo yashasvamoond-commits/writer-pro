@@ -124,7 +124,7 @@ export default function App() {
       <div className="app">
         <div className="topbar">
           <button className="tbtn" onClick={() => setSidebarOpen((v) => !v)} title={t('panels')}>☰</button>
-          <div className="brand">{t('brand')} <small>· {t('brandSub')}</small></div>
+          <div className="brand">⚖ {t('brand')} <small>· {t('brandSub')}</small></div>
           <input
             className="doc-title"
             value={doc.title}

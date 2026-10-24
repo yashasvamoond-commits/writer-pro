@@ -117,8 +117,8 @@ export default function Toolbar(p: Props) {
       </Menu>
       <span className="sep" />
 
-      <button className="tbtn" onClick={() => editor.chain().focus().undo().run()} title={t('undo')}>↩</button>
-      <button className="tbtn" onClick={() => editor.chain().focus().redo().run()} title={t('redo')}>↪</button>
+      <button className="tbtn" disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} title={t('undo')}>↩</button>
+      <button className="tbtn" disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} title={t('redo')}>↪</button>
       <span className="sep" />
 
       <button className="tbtn" onClick={() => editor.chain().focus().toggleBold().run()} title="Bold"><b>B</b></button>

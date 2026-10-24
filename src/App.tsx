@@ -38,6 +38,35 @@ export default function App() {
   const [boxes, setBoxes] = useState<TextBox[]>(() => doc.textBoxes || []);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ id: string; mode: 'move' | 'resize'; sx: number; sy: number; ox: number; oy: number; ow: number; oh: number } | null>(null);
+  /** per text-box undo/redo stacks (session) — plain textareas have no reliable undo on Android WebView */
+  const [boxHist, setBoxHist] = useState<Record<string, { undos: string[]; redos: string[] }>>({});
+  const boxText = (b: TextBox) => b.text;
+  const boxUndo = (b: TextBox) => {
+    const h = boxHist[b.id];
+    if (!h || !h.undos.length) return;
+    const prev = h.undos[h.undos.length - 1];
+    setBoxHist((cur) => ({ ...cur, [b.id]: { undos: cur[b.id].undos.slice(0, -1), redos: [...cur[b.id].redos, boxText(b)] } }));
+    commitBoxes(boxes.map((x) => (x.id === b.id ? { ...x, text: prev } : x)));
+  };
+  const boxRedo = (b: TextBox) => {
+    const h = boxHist[b.id];
+    if (!h || !h.redos.length) return;
+    const next = h.redos[h.redos.length - 1];
+    setBoxHist((cur) => ({ ...cur, [b.id]: { undos: [...cur[b.id].undos, boxText(b)], redos: cur[b.id].redos.slice(0, -1) } }));
+    commitBoxes(boxes.map((x) => (x.id === b.id ? { ...x, text: next } : x)));
+  };
+  const boxEdit = (b: TextBox, text: string) => {
+    if (text === b.text) return;
+    setBoxHist((cur) => {
+      const h = cur[b.id] || { undos: [], redos: [] };
+      return { ...cur, [b.id]: { undos: [...h.undos, b.text].slice(-50), redos: [] } };
+    });
+    setBoxes((cur) => cur.map((x) => (x.id === b.id ? { ...x, text } : x)));
+    window.setTimeout(() => commitBoxesRef.current(boxesRef.current), 600);
+  };
+  const boxCopy = async (b: TextBox) => {
+    try { await navigator.clipboard.writeText(b.text); } catch { /* clipboard blocked */ }
+  };
   const [ocrWords, setOcrWords] = useState<string[]>([]);
   const [cases, setCases] = useState<CaseInfo[]>([]);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -248,6 +277,9 @@ export default function App() {
                   <div key={b.id} className="tbox" style={{ left: `${b.xPct}%`, top: `${b.yPct}%`, width: `${b.wPct}%`, height: b.hPx }}>
                     <div className="tb-head" onPointerDown={(e) => onBoxPointerDown(e, b, 'move')}>
                       <span className="tb-grip">⠿</span>
+                      <button disabled={!(boxHist[b.id]?.undos.length)} onClick={(e) => { e.stopPropagation(); boxUndo(b); }} title={t('undo')}>↩</button>
+                      <button disabled={!(boxHist[b.id]?.redos.length)} onClick={(e) => { e.stopPropagation(); boxRedo(b); }} title={t('redo')}>↪</button>
+                      <button onClick={(e) => { e.stopPropagation(); void boxCopy(b); }} title={t('tbCopy')}>⧉</button>
                       <select value={b.align} onChange={(e) => commitBoxes(boxes.map((x) => x.id === b.id ? { ...x, align: e.target.value as TextBox['align'] } : x))} onPointerDown={(e) => e.stopPropagation()}>
                         <option value="left">⬅</option><option value="center">☰</option><option value="right">➡</option>
                       </select>
@@ -261,7 +293,7 @@ export default function App() {
                       value={b.text}
                       placeholder={t('tbTitle')}
                       style={{ fontSize: `${b.sizePt}pt`, textAlign: b.align, fontFamily: b.lang === 'hi' ? 'var(--font-hi)' : 'var(--font-en)' }}
-                      onChange={(e) => { const v = e.target.value; setBoxes((cur) => cur.map((x) => x.id === b.id ? { ...x, text: v } : x)); window.setTimeout(() => commitBoxesRef.current(boxesRef.current), 600); }}
+                      onChange={(e) => boxEdit(b, e.target.value)}
                     />
                     <div className="tb-rs" onPointerDown={(e) => onBoxPointerDown(e, b, 'resize')} />
                   </div>

@@ -70,6 +70,7 @@ const S: Record<string, [string, string]> = {
   tbDrag: ['Drag header strip to move · corner to resize / हेडर पट्टी खींचें · कोने से माप बदलें', 'हेडर पट्टी खींचें'],
   tbDel: ['Delete box / बॉक्स हटाएँ', 'बॉक्स हटाएँ'],
   tbAdd: ['＋ Text box / ＋ टेक्स्ट बॉक्स', '＋ टेक्स्ट बॉक्स'],
+  tbCopy: ['Copy box text / बॉक्स पाठ कॉपी', 'बॉक्स पाठ कॉपी'],
   // v6 page setup
   pageSetupTitle: ['Page setup / पृष्ठ सेटअप', 'पृष्ठ सेटअप'],
   tabPaper: ['Paper & margins', 'पेपर व हाशिया'],

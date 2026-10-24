@@ -612,3 +612,23 @@ table.mini td, table.mini th { border: 1px solid var(--line); padding: 4px 6px; 
   .clerk-search { padding: 12px 14px; font-size: 14px; }
   .ag-row { padding: 9px 12px; }
 }
+
+/* ============ v9 · paralegal workbench ============ */
+.clerk-switch {
+  display: flex; gap: 4px; margin-top: 10px; background: #efe7d2; border-radius: 11px; padding: 3px;
+}
+.clerk-switch button {
+  flex: 1; border: 0; background: transparent; color: #6b6353; font-size: 12.5px; font-weight: 600;
+  padding: 8px 6px; border-radius: 9px; cursor: pointer;
+}
+.clerk-switch button.on { background: #fffdf7; color: #4a3c22; box-shadow: 0 1px 4px rgba(0,0,0,.14); }
+@media (pointer: coarse) { .clerk-switch button { padding: 12px 8px; font-size: 14px; } }
+.court-stats { font-size: 10.5px; color: #7a6a45; font-weight: 500; margin-left: 6px; white-space: nowrap; }
+.court-head .btn.tiny.bundle { margin-left: 6px; padding: 3px 7px; }
+.court-head.party { background: linear-gradient(#e6ecf6, #d9e2f0); border-color: #bcc9de; color: #33465f; }
+.court-head.party .cnt { background: #3d5a80; }
+.badge.court-mini { background: #e3ecfb; color: #2f538f; border: 1px solid #b9cdf0; }
+.cr-meta span.copyable { cursor: pointer; border-bottom: 1px dotted #b8a878; }
+.cr-meta span.copyable:active { background: #f6ecd2; }
+.cr-note { background: #fdf3d7; border: 1px solid #e5cf94; color: #6b5426; border-radius: 7px; padding: 1px 7px; }
+.ag-row .btn.tiny { padding: 2px 6px; min-height: 24px; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractCaseMeta, findDates, fmtDate, daysUntil } from '../src/lib/clerk-extract';
+import { extractCaseMeta, findDates, fmtDate, daysUntil, splitParties, partyKey } from '../src/lib/clerk-extract';
 
 describe('paralegal extraction', () => {
   it('case number — English & Hindi', () => {
@@ -51,6 +51,13 @@ describe('paralegal extraction', () => {
   });
   it('advocate name', () => {
     expect(extractCaseMeta(' argued by Advocate R.K. Sharma for applicant').advocate).toMatch(/R\.K\. Sharma/);
+  });
+  it('party splitting & grouping keys', () => {
+    expect(splitParties('Ram Lal vs State of Rajasthan')).toEqual({ first: 'Ram Lal', second: 'State of Rajasthan' });
+    expect(splitParties('रामलाल वनाम राज्य राजस्थान').first).toBe('रामलाल');
+    expect(splitParties('Smt. Anita Devi versus Union of India').second).toBe('Union of India');
+    expect(partyKey('  ram   lal. ')).toBe('ram lal');
+    expect(splitParties(undefined)).toEqual({});
   });
   it('empty text yields empty meta', () => {
     const m = extractCaseMeta('');

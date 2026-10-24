@@ -40,6 +40,15 @@ Android APK packaging (Capacitor): see [`docs/APK-BUILD.md`](docs/APK-BUILD.md).
 | Clean grouped UI: collapsible panel with close button + edge handle, File/Convert/View/Insert menus |
 | My-cases register (myCases.txt) | `src/lib/cases.ts` parser + Cases panel (next-date sorted, one-tap cause titles) — sample at `docs/sample-mycases.json` |
 
+## Feature highlights (v4 — tablet & polish)
+
+- **Tablet / touch-optimised layout**: 44px+ touch targets, wider panels,
+  larger type & controls on coarse pointers, no tap-highlight, press feedback.
+- **Visual polish**: gradient top bar, animated menus/modals/toasts, softer
+  paper sheet with refined shadow, status-bar chips, focus rings, selection.
+- **New templates**: standalone सत्यापन / Verification (Hindi + English) and
+  Oath Commissioner / Notary certification block with seal spaces.
+
 ## Feature highlights (v3)
 
 - **Dedicated language switch** (top-bar EN / हिं): the whole software renders

@@ -370,6 +370,47 @@ export const SKELETONS: Skeleton[] = [
       'R:दिनांक: {{date}}',
   },
   {
+    id: 'satyapan-hi',
+    cat: 'Civil & Revenue',
+    title: 'सत्यापन प्रपत्र / Verification (standalone Hindi)',
+    desc: 'पैरा रेंज, स्थान, दिनांक, हस्ताक्षर व स्टाम्प ब्लॉक सहित',
+    body:
+      'H2:B:सत्यापन\n' +
+      'P1:कि उपरोक्त मद / पैरा संख्या 1 से {{last_para}} तक के कथन मेरे निजी ज्ञान से सच व सही हैं तथा मेरे वकील की सलाह से लिखे गए शेष कथन मैंने पढ़कर सही माने हैं।\n' +
+      'P1:कि इस सत्यापन में कोई तथ्य छिपाया नहीं गया है एवं कोई असत्य कथन नहीं है।\n' +
+      'P1:यह सत्यापन आज दिनांक {{date}} स्थान {{place}} में लेखक द्वारा लिखकर मेरे समक्ष सत्यापित किया गया है।\n' +
+      'R:B:सत्यापनकर्ता / Deponent\n' +
+      'R:हस्ताक्षर: ____________\n' +
+      'C:〔न्यायालय स्टाम्प / ओथ कमिश्नर मुहर〕',
+  },
+  {
+    id: 'verification-en',
+    cat: 'Civil & Revenue',
+    title: 'Verification (standalone English)',
+    desc: 'knowledge & belief clauses, place/date, signature & stamp block',
+    body:
+      'H2:B:VERIFICATION\n' +
+      'P1:That the contents of paras 1 to {{last_para}} of the accompanying pleading are true and correct to my personal knowledge; the contents based on legal advice are believed to be true.\n' +
+      'P1:That no material fact has been concealed and nothing stated herein is false.\n' +
+      'P1:Verified at {{place}} on this {{date}}.\n' +
+      'R:B:DEPONENT / VERIFIER\n' +
+      'R:Signature: ____________\n' +
+      'C:〔Court stamp / Oath Commissioner seal〕',
+  },
+  {
+    id: 'oath-notary',
+    cat: 'Civil & Revenue',
+    title: 'ओथ कमिश्नर / नोटरी प्रमापन ब्लॉक',
+    desc: 'Oath Commissioner / Notary certification with seal spaces',
+    body:
+      'H3:B:ओथ कमिश्नर / नोटरी प्रमापन\n' +
+      'J:कि शपथगृहीता {{client_name}} ने मेरी उपस्थिति में इस शपथ पत्र / सत्यापन को पढ़कर / पढ़वाकर हस्ताक्षर किए एवं अपनी पहचान प्रमाणित की।\n' +
+      'R:हस्ताक्षर व मुहर: ____________\n' +
+      'R:ओथ कमिश्नर / नोटरी, {{place}}\n' +
+      'R:दिनांक: {{date}}\n' +
+      'C:〔COMMISSIONER SEAL / नोटरी मुहर〕',
+  },
+  {
     id: 'affidavit-general',
     cat: 'Civil & Revenue',
     title: 'Affidavit (bilingual, with stamp space)',

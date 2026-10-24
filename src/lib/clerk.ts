@@ -17,6 +17,7 @@ import {
   AlignmentType, Document, LineRuleType, Packer, PageBreak, Paragraph, TextRun,
 } from 'docx';
 import { classifyText, ClassifyResult } from './court-classify';
+import { extractCaseMeta, CaseMeta } from './clerk-extract';
 
 GlobalWorkerOptions.workerSrc = workerSrc;
 
@@ -38,6 +39,7 @@ export interface ReadResult {
   ocr: boolean;
   note?: 'legacy-doc' | 'empty';
   cls: ClassifyResult;
+  meta: CaseMeta;
 }
 
 /* ------------------------------------------------------------------ */
@@ -164,28 +166,30 @@ export async function readFileSmart(file: File, onProgress?: (p: number) => void
         ocr = true;
       }
       const cls = classifyText(text);
-      return { text, ocr, cls, note: text.trim() ? undefined : 'empty' };
+      return { text, ocr, cls, meta: extractCaseMeta(text), note: text.trim() ? undefined : 'empty' };
     }
     if (kind === 'docx') {
       const text = await extractDocxText(file);
-      return { text, ocr: false, cls: classifyText(text), note: text.trim() ? undefined : 'empty' };
+      return { text, ocr: false, cls: classifyText(text), meta: extractCaseMeta(text), note: text.trim() ? undefined : 'empty' };
     }
     if (kind === 'doc') {
       // Legacy binary .doc cannot be parsed in-browser; only the name is evidence.
-      return { text: '', ocr: false, cls: classifyText(file.name.replace(/\.[^.]+$/, ' ')), note: 'legacy-doc' };
+      const nameText = file.name.replace(/\.[^.]+$/, ' ');
+      return { text: '', ocr: false, cls: classifyText(nameText), meta: extractCaseMeta(nameText), note: 'legacy-doc' };
     }
     if (kind === 'image') {
       const text = await ocrImage(file);
-      return { text, ocr: true, cls: classifyText(text), note: text.trim() ? undefined : 'empty' };
+      return { text, ocr: true, cls: classifyText(text), meta: extractCaseMeta(text), note: text.trim() ? undefined : 'empty' };
     }
     if (kind === 'txt' || kind === 'html') {
       const text = await file.text();
-      return { text, ocr: false, cls: classifyText(text) };
+      return { text, ocr: false, cls: classifyText(text), meta: extractCaseMeta(text) };
     }
   } catch {
     /* fall through */
   }
-  return { text: '', ocr: false, cls: classifyText(file.name.replace(/\.[^.]+$/, ' ')), note: 'legacy-doc' };
+  const nameText = file.name.replace(/\.[^.]+$/, ' ');
+  return { text: '', ocr: false, cls: classifyText(nameText), meta: extractCaseMeta(nameText), note: 'legacy-doc' };
 }
 
 /* ------------------------------------------------------------------ */

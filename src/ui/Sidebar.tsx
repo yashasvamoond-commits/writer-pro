@@ -61,7 +61,7 @@ export default function Sidebar(props: Props) {
         ))}
       </div>
       <div className="pane">
-        {tab === 'clerk' && <ClerkPane toast={props.toast} />}
+        {tab === 'clerk' && <ClerkPane toast={props.toast} editor={props.editor} />}
         {tab === 'templates' && <TemplatesPane insert={insert} onCauseTitle={props.onCauseTitle} editor={props.editor} vars={props.vars} toast={props.toast} />}
         {tab === 'fonts' && <FontsPane settings={props.settings} patch={props.patch} />}
         {tab === 'variables' && <VariablesPane vars={props.vars} onVars={props.onVars} />}
